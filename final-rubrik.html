@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Final Exam Rubric – Production-Grade CI/CD System</title>
+<style>
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 20px;
+  }
+
+  h1, h2 {
+    text-align: center;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    margin-bottom: 30px;
+  }
+
+  th, td {
+    border: 1px solid #444;
+    padding: 12px;
+    text-align: center;
+    vertical-align: middle;
+    word-wrap: break-word;
+  }
+
+  th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+  }
+
+  td.description {
+    text-align: left;
+  }
+
+  .score-col {
+    width: 12%;
+    font-weight: bold;
+  }
+
+  .criteria-col {
+    width: 88%;
+  }
+
+  .note {
+    border: 1px solid #999;
+    padding: 15px;
+    background-color: #fafafa;
+    margin-top: 20px;
+  }
+</style>
+</head>
+
+<body>
+
+<h1>FINAL EXAM RUBRIC</h1>
+<h2>Production-Grade CI/CD System (Total: 10.0 points)</h2>
+
+<!-- 1. Infrastructure -->
+<table>
+    <colgroup>
+    <col style="width:12%">
+    <col style="width:88%">
+  </colgroup>
+  <tr>
+    <th colspan="2">1. Infrastructure Provisioning & Environment Readiness (2.0 points)</th>
+  </tr>
+  <tr>
+    <th class="score-col">Score</th>
+    <th class="criteria-col">Description</th>
+  </tr>
+  <tr>
+    <td class="score-col">0.0</td>
+    <td class="description">No functional cloud environment; system not reachable via public domain.</td>
+  </tr>
+  <tr>
+    <td>1.0</td>
+    <td class="description">Manual provisioning on a real cloud server; domain and HTTPS correctly configured; environment stable but mostly manual.</td>
+  </tr>
+  <tr>
+    <td>1.5</td>
+    <td class="description">Partial automation (Terraform or Ansible or structured scripts); environment reproducible with minor manual steps.</td>
+  </tr>
+  <tr>
+    <td>2.0</td>
+    <td class="description">Full Infrastructure as Code using Terraform and configuration management; idempotent setup; secure and production-ready environment with clear evidence.</td>
+  </tr>
+</table>
+
+<!-- 2. Architecture -->
+<table>
+    <colgroup>
+    <col style="width:12%">
+    <col style="width:88%">
+  </colgroup>
+  <tr>
+    <th colspan="2">2. Architecture & Deployment Model (Tier-Based Execution Quality) (2.5 points)</th>
+  </tr>
+  <tr>
+    <th class="score-col">Score</th>
+    <th class="criteria-col">Description</th>
+  </tr>
+  <tr>
+    <td>0.0</td>
+    <td class="description">Deployment fails or system is not operational.</td>
+  </tr>
+  <tr>
+    <td>1.0</td>
+    <td class="description">Tier 1 – Single-server non-containerized deployment using systemd or PM2; operational but limited scalability.</td>
+  </tr>
+  <tr>
+    <td>1.5</td>
+    <td class="description">Tier 2 – Single-server containerized deployment (Docker Compose) with correct service separation and persistent storage.</td>
+  </tr>
+  <tr>
+    <td>2.0</td>
+    <td class="description">Tier 3 – Multi-server architecture with centralized load balancing (managed cloud load balancer preferred); horizontal scaling demonstrated.</td>
+  </tr>
+  <tr>
+    <td>2.5</td>
+    <td class="description">Tier 4 or Tier 5 – Docker Swarm or Kubernetes orchestration with service replication, resilience, and scalable architecture.</td>
+  </tr>
+</table>
+
+<!-- 3. CI/CD -->
+<table>
+    <colgroup>
+    <col style="width:12%">
+    <col style="width:88%">
+  </colgroup>
+  <tr>
+    <th colspan="2">3. CI/CD Pipeline Implementation (CI + CD + DevSecOps) (2.5 points)</th>
+  </tr>
+  <tr>
+    <th class="score-col">Score</th>
+    <th class="criteria-col">Description</th>
+  </tr>
+  <tr>
+    <td>0.0</td>
+    <td class="description">No working CI/CD pipeline.</td>
+  </tr>
+  <tr>
+    <td>1.0</td>
+    <td class="description">Basic automated pipeline (build → deploy); limited checks and weak versioning.</td>
+  </tr>
+  <tr>
+    <td>1.5</td>
+    <td class="description">Functional CI pipeline (lint, build, caching) and automated CD; security integration minimal or incomplete.</td>
+  </tr>
+  <tr>
+    <td>2.0</td>
+    <td class="description">Complete CI/CD pipeline with versioned artifacts or images, automated deployment, and security scanning integrated.</td>
+  </tr>
+  <tr>
+    <td>2.5</td>
+    <td class="description">Production-grade CI/CD with enforced security fail gates, clean versioning strategy, and controlled deployment behaviour.</td>
+  </tr>
+</table>
+
+<!-- 4. Monitoring -->
+<table>
+    <colgroup>
+    <col style="width:12%">
+    <col style="width:88%">
+  </colgroup>
+  <tr>
+    <th colspan="2">4. Monitoring, Observability & Runtime Awareness (1.0 point)</th>
+  </tr>
+  <tr>
+    <th class="score-col">Score</th>
+    <th class="criteria-col">Description</th>
+  </tr>
+  <tr>
+    <td>0.0</td>
+    <td class="description">No monitoring system, or monitoring installed but not functioning.</td>
+  </tr>
+  <tr>
+    <td>0.5</td>
+    <td class="description">Monitoring stack operational (Prometheus + Grafana) with basic system metrics visible.</td>
+  </tr>
+  <tr>
+    <td>1.0</td>
+    <td class="description">Monitoring meaningfully integrated; dashboards clearly reflect system behaviour and are used during deployment or failure demonstration.</td>
+  </tr>
+</table>
+
+<!-- 5. Demo -->
+<table>
+    <colgroup>
+    <col style="width:12%">
+    <col style="width:88%">
+  </colgroup>
+  <tr>
+    <th colspan="2">5. Mandatory Demonstration (Video Demo and/or Live Presentation) (1.0 point)</th>
+  </tr>
+  <tr>
+    <th class="score-col">Score</th>
+    <th class="criteria-col">Description</th>
+  </tr>
+  <tr>
+    <td>0.0</td>
+    <td class="description">Demo missing or heavily staged; CI/CD flow not demonstrated end-to-end.</td>
+  </tr>
+  <tr>
+    <td>0.5</td>
+    <td class="description">Partial demo; some stages shown but missing production verification or monitoring evidence.</td>
+  </tr>
+  <tr>
+    <td>1.0</td>
+    <td class="description">Complete end-to-end demonstration from code change to production update, HTTPS verification, monitoring inspection, and failure simulation.</td>
+  </tr>
+</table>
+
+<!-- 6. Report -->
+<table>
+    <colgroup>
+    <col style="width:12%">
+    <col style="width:88%">
+  </colgroup>
+  <tr>
+    <th colspan="2">6. Technical Report (Academic Quality & Evidence Integration) (1.0 point)</th>
+  </tr>
+  <tr>
+    <th class="score-col">Score</th>
+    <th class="criteria-col">Description</th>
+  </tr>
+  <tr>
+    <td>0.0</td>
+    <td class="description">Report missing, incomplete, or lacks technical coherence.</td>
+  </tr>
+  <tr>
+    <td>0.5</td>
+    <td class="description">Report complete and understandable but limited in analysis or evidence integration.</td>
+  </tr>
+  <tr>
+    <td>1.0</td>
+    <td class="description">Professional academic report with clear structure, justified design decisions, diagrams, and well-integrated evidence.</td>
+  </tr>
+</table>
+
+<div class="note">
+  <strong>Important Submission Notes (Not Graded Separately):</strong>
+  <ul>
+    <li>Submission completeness and professionalism are mandatory but not scored separately.</li>
+    <li>Any feature or functionality will only be recognized for scoring if it appears in both the video demo (and/or live presentation) and the technical report.</li>
+    <li>Features implemented but not demonstrated and documented will be treated as non-existent for grading purposes.</li>
+  </ul>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,4 @@
+---
+- import_playbook: 01-bootstrap.yml
+- import_playbook: 02-swarm.yml
+- import_playbook: 03-traefik-letsencrypt.yml

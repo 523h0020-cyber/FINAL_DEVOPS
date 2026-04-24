@@ -1,0 +1,34 @@
+---
+- name: Initialize Docker Swarm on manager
+  hosts: manager
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Ensure manager is in swarm mode
+      community.docker.docker_swarm:
+        state: present
+        advertise_addr: "{{ swarm_manager_advertise_addr | default(ansible_host | default(ansible_default_ipv4.address)) }}"
+
+    - name: Read swarm join tokens
+      community.docker.docker_swarm_info:
+      register: manager_swarm_info
+
+    - name: Share manager endpoint and worker token with other hosts
+      ansible.builtin.set_fact:
+        swarm_manager_endpoint: "{{ swarm_manager_advertise_addr | default(ansible_host | default(ansible_default_ipv4.address)) }}"
+        swarm_worker_join_token: "{{ manager_swarm_info.swarm_facts.JoinTokens.Worker }}"
+
+- name: Join worker nodes to Docker Swarm
+  hosts: workers
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Ensure worker is joined to swarm
+      community.docker.docker_swarm:
+        state: join
+        advertise_addr: "{{ swarm_worker_advertise_addr | default(ansible_host | default(ansible_default_ipv4.address)) }}"
+        join_token: "{{ hostvars[groups['manager'][0]].swarm_worker_join_token }}"
+        remote_addrs:
+          - "{{ hostvars[groups['manager'][0]].swarm_manager_endpoint }}:2377"

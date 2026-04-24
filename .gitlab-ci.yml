@@ -1,0 +1,124 @@
+stages:
+  - ci
+  - build
+  - deploy
+
+variables:
+  APP_DIR: "sample-final-project/sample-midterm-node.js-project"
+  PACKAGE_MANAGER: "npm" # npm | maven | pip
+  ORCHESTRATOR: "swarm" # swarm | kubernetes
+  DOCKER_IMAGE: "$DOCKERHUB_USERNAME/final-tier4-app"
+  DOCKER_TLS_CERTDIR: "/certs"
+
+cache:
+  key: "${CI_COMMIT_REF_SLUG}-${PACKAGE_MANAGER}"
+  paths:
+    - sample-final-project/sample-midterm-node.js-project/node_modules/
+    - .m2/repository/
+    - .cache/pip/
+
+ci_lint_and_security:
+  stage: ci
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update
+    - apt-get install -y curl git ca-certificates python3 python3-pip openjdk-21-jdk maven npm
+    - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+  script:
+    - cd "$APP_DIR"
+    - |
+      set -euo pipefail
+      case "$PACKAGE_MANAGER" in
+        npm)
+          npm ci
+          npm run lint --if-present
+          ;;
+        maven)
+          mvn -B -ntp dependency:go-offline
+          mvn -B -ntp -DskipTests verify
+          ;;
+        pip)
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
+          pip3 install flake8
+          flake8 .
+          ;;
+        *)
+          echo "Unsupported PACKAGE_MANAGER=$PACKAGE_MANAGER" >&2
+          exit 1
+          ;;
+      esac
+    - trivy fs --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed .
+
+build_and_push:
+  stage: build
+  image: docker:27.0.3
+  services:
+    - name: docker:27.0.3-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - apk add --no-cache bash curl
+    - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  script:
+    - |
+      set -euo pipefail
+      SHA_TAG="sha-${CI_COMMIT_SHORT_SHA}"
+      SEMVER_TAG="v1.0.${CI_PIPELINE_IID}"
+      IMAGE_SHA="${DOCKER_IMAGE}:${SHA_TAG}"
+      IMAGE_SEMVER="${DOCKER_IMAGE}:${SEMVER_TAG}"
+
+      docker build -t "$IMAGE_SHA" -t "$IMAGE_SEMVER" "$APP_DIR"
+      trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed "$IMAGE_SHA"
+
+      docker push "$IMAGE_SHA"
+      docker push "$IMAGE_SEMVER"
+
+      if echo "${CI_COMMIT_TAG:-}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+        docker tag "$IMAGE_SHA" "${DOCKER_IMAGE}:${CI_COMMIT_TAG}"
+        docker push "${DOCKER_IMAGE}:${CI_COMMIT_TAG}"
+      fi
+
+      echo "DEPLOY_IMAGE=$IMAGE_SEMVER" > build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+
+deploy:
+  stage: deploy
+  image: alpine:3.20
+  needs:
+    - build_and_push
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  before_script:
+    - apk add --no-cache bash openssh-client curl
+  script:
+    - |
+      set -euo pipefail
+      if [ "$ORCHESTRATOR" = "swarm" ]; then
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        echo "$SWARM_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H "$SWARM_MANAGER_HOST" >> ~/.ssh/known_hosts
+
+        ssh -i ~/.ssh/id_rsa "$SWARM_MANAGER_USER@$SWARM_MANAGER_HOST" "
+          docker login -u '$DOCKERHUB_USERNAME' -p '$DOCKERHUB_TOKEN' &&
+          docker pull '$DEPLOY_IMAGE' &&
+          docker service update --with-registry-auth --image '$DEPLOY_IMAGE' '$SWARM_SERVICE_NAME'
+        "
+      elif [ "$ORCHESTRATOR" = "kubernetes" ]; then
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        install -m 0755 kubectl /usr/local/bin/kubectl
+        mkdir -p ~/.kube
+        echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+        kubectl -n "$K8S_NAMESPACE" set image deployment/"$K8S_DEPLOYMENT_NAME" "$K8S_CONTAINER_NAME=$DEPLOY_IMAGE"
+        kubectl -n "$K8S_NAMESPACE" rollout status deployment/"$K8S_DEPLOYMENT_NAME" --timeout=180s
+      else
+        echo "Unsupported ORCHESTRATOR=$ORCHESTRATOR" >&2
+        exit 1
+      fi

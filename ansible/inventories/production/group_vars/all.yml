@@ -1,0 +1,13 @@
+---
+domain_name: "523h0020.site"
+letsencrypt_email: "admin@523h0020.site"
+
+traefik_network_name: "traefik-public"
+traefik_stack_name: "traefik"
+traefik_version: "v3.0.4"
+whoami_version: "v1.10.2"
+
+docker_users:
+  - ubuntu
+  - ec2-user
+  - debian

@@ -1,0 +1,127 @@
+---
+- name: Bootstrap dependencies and Docker engine
+  hosts: swarm
+  become: true
+  gather_facts: true
+
+  vars:
+    common_packages_debian:
+      - ca-certificates
+      - curl
+      - gnupg
+      - python3
+      - python3-pip
+      - unzip
+    common_packages_redhat:
+      - ca-certificates
+      - curl
+      - python3
+      - python3-pip
+      - unzip
+    docker_packages_debian:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+
+  tasks:
+    - name: Install base packages on Debian/Ubuntu
+      ansible.builtin.apt:
+        name: "{{ common_packages_debian }}"
+        state: present
+        update_cache: true
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure apt keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+      when: ansible_os_family == "Debian"
+
+    - name: Add Docker apt GPG key
+      ansible.builtin.get_url:
+        url: "https://download.docker.com/linux/{{ 'ubuntu' if ansible_distribution == 'Ubuntu' else 'debian' }}/gpg"
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+        force: true
+      when: ansible_os_family == "Debian"
+
+    - name: Add Docker apt repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch={{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/{{ 'ubuntu' if ansible_distribution == 'Ubuntu' else 'debian' }} {{ ansible_distribution_release }} stable"
+        filename: docker
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install Docker on Debian/Ubuntu
+      ansible.builtin.apt:
+        name: "{{ docker_packages_debian }}"
+        state: present
+        update_cache: true
+      when: ansible_os_family == "Debian"
+
+    - name: Install base packages on RedHat/Amazon Linux
+      ansible.builtin.dnf:
+        name: "{{ common_packages_redhat }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Docker on RedHat/Amazon Linux
+      ansible.builtin.dnf:
+        name: docker
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure docker group exists
+      ansible.builtin.group:
+        name: docker
+        state: present
+
+    - name: Configure Docker daemon log rotation
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        mode: "0644"
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            }
+          }
+      notify: Restart Docker
+
+    - name: Enable and start Docker service
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Install Docker SDK for Python (required by community.docker)
+      ansible.builtin.pip:
+        name: docker
+        state: present
+        executable: pip3
+
+    - name: Check which configured docker users exist
+      ansible.builtin.command: "id -u {{ item }}"
+      register: docker_user_check
+      changed_when: false
+      failed_when: false
+      loop: "{{ docker_users }}"
+
+    - name: Add existing users to docker group
+      ansible.builtin.user:
+        name: "{{ item.item }}"
+        groups: docker
+        append: true
+      loop: "{{ docker_user_check.results }}"
+      when: item.rc == 0
+
+  handlers:
+    - name: Restart Docker
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted

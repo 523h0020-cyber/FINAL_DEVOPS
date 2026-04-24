@@ -1,0 +1,64 @@
+---
+- name: Deploy Traefik ingress with Let's Encrypt
+  hosts: manager
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Validate domain format
+      ansible.builtin.assert:
+        that:
+          - domain_name is match("^[A-Za-z0-9.-]+$")
+        fail_msg: "domain_name is invalid. Update inventories/production/group_vars/all.yml"
+
+    - name: Ensure Traefik directory exists
+      ansible.builtin.file:
+        path: /opt/swarm/traefik
+        state: directory
+        mode: "0755"
+
+    - name: Ensure acme storage file exists with secure permissions
+      ansible.builtin.copy:
+        dest: /opt/swarm/traefik/acme.json
+        content: "{}"
+        mode: "0600"
+        force: false
+
+    - name: Ensure Traefik overlay network exists
+      community.docker.docker_network:
+        name: "{{ traefik_network_name }}"
+        driver: overlay
+        attachable: true
+        scope: swarm
+        state: present
+
+    - name: Render Traefik stack manifest
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/traefik-stack.yml.j2"
+        dest: /opt/swarm/traefik/traefik-stack.yml
+        mode: "0644"
+
+    - name: Deploy Traefik stack
+      community.docker.docker_stack:
+        state: present
+        name: "{{ traefik_stack_name }}"
+        compose:
+          - /opt/swarm/traefik/traefik-stack.yml
+        prune: true
+        with_registry_auth: true
+
+    - name: Wait for Traefik service to converge
+      ansible.builtin.command:
+        argv:
+          - docker
+          - service
+          - ls
+          - --filter
+          - "name={{ traefik_stack_name }}_traefik"
+          - --format
+          - "{{ '{{.Replicas}}' }}"
+      register: traefik_replicas
+      changed_when: false
+      until: "'1/1' in traefik_replicas.stdout"
+      retries: 12
+      delay: 5
