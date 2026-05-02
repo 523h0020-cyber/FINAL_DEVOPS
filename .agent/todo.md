@@ -2,15 +2,15 @@
 
 ## Phase 1 & 2 (Infra)
 
-- [ ] Define Cloud Provider & Tech Stack.
+- [x] Define Cloud Provider & Tech Stack (AWS, Node.js, MongoDB).
 - [x] Write Terraform `.tf` files (AWS/GCP, VPC, subnets, SG/Firewall 22,80,443, Swarm/K8s options).
 - [x] Write Ansible `playbook.yml` (Install dependencies, Docker, Swarm init/join, Traefik + Let's Encrypt).
-- [ ] Buy/Setup Domain & configure DNS records.
+- [x] Buy/Setup Domain & configure DNS records (523h0020.site).
 
 ## Phase 3 (App & Swarm)
 
-- [ ] Write optimized `Dockerfile`.
-- [ ] Write `swarm-stack.yml` (Traefik reverse proxy + App replicas + DB volumes).
+- [x] Write optimized `Dockerfile` (using Node.js Alpine multi-stage).
+- [x] Write `swarm-stack.yml` (Traefik reverse proxy + App replicas + DB volumes, NO latest tag).
 
 ## Phase 4 (CI/CD)
 

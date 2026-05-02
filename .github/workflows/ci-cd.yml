@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 env:
-  APP_DIR: "sample-final-project/sample-midterm-node.js-project"
+  APP_DIR: "app"
   PACKAGE_MANAGER: "npm" # npm | maven | pip
   ORCHESTRATOR: "swarm" # swarm | kubernetes
   DOCKER_IMAGE: "${{ secrets.DOCKERHUB_USERNAME }}/final-tier4-app"

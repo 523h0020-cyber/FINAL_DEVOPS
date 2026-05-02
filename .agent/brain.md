@@ -8,11 +8,11 @@ Note: dựa vào .agent, mỗi lần todo task cập nhật lại tiến trình 
 
 ## 1. TECH STACK MEMORY
 
-- Cloud Provider: [Pending - Template supports AWS or GCP]
-- App Stack: [Pending]
-- Database: [Pending]
-- CI/CD Tool: [GitHub Actions + GitLab CI templates ready]
-- Domain: [523h0020.site]
+- Cloud Provider: AWS
+- App Stack: Node.js
+- Database: MongoDB (mongo:7.0.4)
+- CI/CD Tool: GitHub Actions
+- Domain: 523h0020.site
 
 ## 2. INFRASTRUCTURE STATE
 

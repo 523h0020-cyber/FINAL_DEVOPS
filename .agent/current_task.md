@@ -5,10 +5,8 @@
 
 **Action Required from User**:
 
-1. Cloud Provider: [AWS / GCP]?
-2. Deployment Mode: [swarm (3 nodes) / kubernetes (EKS or GKE)]?
-3. Application Tech Stack: [Node.js / Python / Java] & Database [MySQL / MongoDB / None]?
-4. CI/CD Tool: [GitHub Actions / GitLab CI]?
-5. Domain Name: [Your domain]?
-6. Follow `demo/video-demo-script.md` during recording (timeline + narration).
-7. Capture proof points: CI security gate, semantic tags, CD deploy, HTTPS update, Grafana metrics, self-healing.
+1. Cập nhật secret GitHub Actions cho Docker Hub và Server SSH (`DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `SWARM_MANAGER_HOST`, `SWARM_MANAGER_USER`, `SWARM_SSH_PRIVATE_KEY`).
+2. Run `terraform apply` trong thư mục `terraform/aws` để khởi tạo hạ tầng.
+3. Chạy `ansible-playbook` để cấu hình server và init Docker Swarm.
+4. Trỏ domain `523h0020.site` về IP của Swarm Manager.
+5. Xem lại video demo script (`demo/video-demo-script.md`) và tiến hành quay.

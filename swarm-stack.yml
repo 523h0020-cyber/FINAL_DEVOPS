@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  app:
+    # Hình ảnh Docker (tuân thủ nguyên tắc Không dùng latest)
+    # Phiên bản có thể bị ghi đè lúc deploy bằng docker service update
+    image: ${DOCKER_IMAGE:-giang/final-tier4-app}:${APP_VERSION:-v1.0.1}
+    environment:
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/final-app
+      - PORT=3000
+    networks:
+      - traefik-public
+      - backend
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.app.rule=Host(`523h0020.site`)"
+        - "traefik.http.routers.app.entrypoints=websecure"
+        - "traefik.http.routers.app.tls.certresolver=myresolver"
+        - "traefik.http.services.app.loadbalancer.server.port=3000"
+
+  mongodb:
+    # Tuyệt đối không dùng latest
+    image: mongo:7.0.4
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - backend
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+networks:
+  traefik-public:
+    external: true
+  backend:
+    driver: overlay
+
+volumes:
+  mongo-data:
