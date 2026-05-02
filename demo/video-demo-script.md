@@ -1,63 +1,73 @@
-# Video Demo Script (Docker Swarm, CI/CD, Monitoring)
+# Kịch Bản Video Demo (Docker Swarm + CI/CD + Monitoring)
 
-## Pre-flight (do before recording)
+## 1) Chuẩn bị trước khi quay (Pre-flight)
 
-- Ensure DNS `523h0020.site` already points to your public entrypoint and HTTPS is valid.
-- Prepare terminal tabs:
-  - Tab 1: local repo for code change + git push.
-  - Tab 2: Docker Swarm manager (`ssh`).
-  - Tab 3: optional load generator (curl loop).
-- Open browser tabs in advance:
-  - GitHub repo (Actions tab) or GitLab CI page.
-  - Docker Hub tags page for your image repo.
-  - `https://523h0020.site`
-  - Grafana dashboard page.
-- Suggested demo length: 12-14 minutes.
+- Đảm bảo domain `523h0020.site` đã trỏ đúng IP public và HTTPS hoạt động.
+- Chuẩn bị 3 cửa sổ terminal:
+  - Terminal 1: máy local để sửa code, commit, push.
+  - Terminal 2: SSH vào Docker Swarm manager để kiểm tra rollout và mô phỏng lỗi.
+  - Terminal 3: tạo traffic nhẹ để biểu đồ Grafana nhảy rõ.
+- Chuẩn bị 4 tab trình duyệt:
+  - Tab GitHub `Actions` (hoặc GitLab `Pipelines`).
+  - Tab Docker Hub tags của image.
+  - Tab web production: `https://523h0020.site`.
+  - Tab Grafana dashboard.
+- Thời lượng khuyến nghị: 12-14 phút.
 
-## Minute-by-minute script
+## 2) Kịch bản theo từng phút
 
-| Time | Hanh dong tren man hinh | Loi thoai thuyet minh |
+| Thời gian | Hành động trên màn hình | Lời thoại gợi ý |
 | --- | --- | --- |
-| 00:00 - 00:40 | Mo slide/README tong quan kien truc (Swarm, Traefik HTTPS, CI/CD, Monitoring). | "Day la he thong Tier 4 cua nhom em: Docker Swarm da node, CI/CD tu dong, HTTPS public domain va monitoring bang Prometheus + Grafana." |
-| 00:40 - 01:30 | Mo source code UI file `sample-final-project/sample-midterm-node.js-project/views/partials/head.ejs`. | "Em se thay doi UI de de nhan biet phien ban moi sau deployment." |
-| 01:30 - 02:20 | Chinh sua heading, vi du doi `Products` thanh `Products - Demo Release v1.0.x` va luu file. | "Em vua doi heading giao dien de chung minh CD cap nhat dung image moi." |
-| 02:20 - 03:10 | Terminal local: `git status`, `git add .`, `git commit -m "feat(ui): demo visible banner for release"`, `git push origin main`. | "Bay gio em commit va push truc tiep len nhanh chinh de trigger pipeline tu dong." |
-| 03:10 - 04:00 | Mo GitHub Actions (hoac GitLab Pipeline) va refresh den khi run moi xuat hien. | "Pipeline da duoc trigger tu dong khi co push vao main, khong can thao tac tay." |
-| 04:00 - 05:20 | Zoom job CI: checkout, cache dependencies, install deps, linting. | "Day la phan CI: checkout code, cache npm/maven/pip, cai dependencies, va linting." |
-| 05:20 - 06:30 | Zoom 2 buoc Trivy: filesystem scan va image scan. | "Phan quan trong ve DevSecOps: Trivy scan se fail ngay neu phat hien HIGH hoac CRITICAL. Nen deployment chi xay ra khi image an toan." |
-| 06:30 - 07:20 | Zoom step versioning: `Prepare semantic tags` + `Build and push semantic tags (no latest)`. Mo Docker Hub tags de show `sha-xxxxxxx`, `v1.0.xxx` va khong co `latest`. | "Nhom em su dung semantic versioning theo run number va commit SHA. Tuyet doi khong dung tag latest de tranh deploy nham ban build." |
-| 07:20 - 08:20 | Zoom job CD: `Deploy to Docker Swarm via SSH` (hoac Kubernetes step neu ban chay K8s). | "Day la phan CD tu dong. Sau khi build va scan dat, pipeline SSH vao manager va update service len image moi." |
-| 08:20 - 09:00 | Tren terminal manager: `docker service ps <SWARM_SERVICE_NAME>` va `docker service ls` de show service da rollout. | "Rollout da hoan tat, service dang chay image moi tren cum Swarm." |
-| 09:00 - 09:50 | Mo `https://523h0020.site`, refresh hard (Ctrl+F5), show icon khoa HTTPS va UI heading moi. | "Day la domain public voi HTTPS hop le. UI da doi dung voi code vua push, chung minh CD thanh cong." |
-| 09:50 - 10:50 | Mo Grafana, chon dashboard ID 1860 va 193 da import. Co the chay load nhe o terminal: `while true; do curl -s https://523h0020.site > /dev/null; sleep 0.3; done` de metric nhay ro hon. | "Tren Grafana, em theo doi CPU, memory muc host va metrics container theo thoi gian thuc. Co traffic thi metric nhay ngay lap tuc." |
-| 10:50 - 12:20 | Gia lap loi tren manager: `docker ps --filter name=<SWARM_SERVICE_NAME>` -> lay container id -> `docker rm -f <container_id>`. Ngay sau do chay `docker service ps <SWARM_SERVICE_NAME>` de show task moi duoc tao lai. | "Em vua kill mot container dang chay. Swarm phat hien trang thai khong dat desired state va tu dong tao task moi. Day la co che self-healing." |
-| 12:20 - 13:00 | Quay lai website + Grafana de show service van online, metric co bien dong khi su co va phuc hoi. | "Du bi loi container, he thong van phuc vu binh thuong va tu phuc hoi. Day la diem chinh cua kien truc orchestration production-grade." |
-| 13:00 - 13:30 | Ket video bang checklist nhanh (CI pass, security pass, versioning, CD auto, HTTPS, Monitoring, self-healing). | "Tong ket: he thong dat day du yeu cau Infrastructure as Code, CI/CD, Security gate, HTTPS, Monitoring va Self-healing." |
+| 00:00 - 00:45 | Mở sơ đồ/README kiến trúc tổng quan (AWS + Swarm + Traefik HTTPS + GitHub Actions + Prometheus/Grafana). | "Đây là hệ thống Tier 4 của nhóm em: triển khai trên AWS, orchestration bằng Docker Swarm đa node, CI/CD tự động bằng GitHub Actions, có HTTPS và Monitoring đầy đủ." |
+| 00:45 - 01:35 | Mở file UI: `app/views/partials/head.ejs`. | "Em sẽ thay đổi một chi tiết UI dễ nhận biết để chứng minh bản deploy mới đã lên production." |
+| 01:35 - 02:20 | Đổi heading từ `Products` thành `Products - Demo Release v1.0.x`, lưu file. | "Đây là thay đổi giao diện có thể nhìn thấy ngay trên website sau khi pipeline chạy xong." |
+| 02:20 - 03:20 | Trên terminal local chạy: `git status`, `git add .`, `git commit -m "feat(ui): update visible demo heading"`, `git push origin main`. | "Em commit và push vào nhánh chính để trigger pipeline CI/CD tự động, không có thao tác deploy thủ công." |
+| 03:20 - 04:10 | Mở GitHub Actions, refresh để thấy run mới. | "Pipeline đã tự khởi chạy ngay khi có push vào main." |
+| 04:10 - 05:30 | Zoom từng bước CI: Checkout -> Setup Node + cache npm -> Install dependencies -> Linting. | "Đây là phần CI chuẩn: checkout mã nguồn, cache dependencies, cài dependency và lint code." |
+| 05:30 - 06:40 | Zoom bước Trivy `filesystem scan` và `image scan`, nhấn mạnh điều kiện fail HIGH/CRITICAL. | "Phần DevSecOps: pipeline sẽ fail ngay nếu Trivy phát hiện lỗ hổng mức HIGH hoặc CRITICAL." |
+| 06:40 - 07:30 | Zoom bước versioning: `Prepare semantic tags`, `Build and push semantic tags (no latest)`. Mở Docker Hub tags để show `sha-xxxxxxx`, `v1.0.xxx`, không có `latest`. | "Nhóm em dùng semantic versioning bằng commit SHA và version theo run number, tuyệt đối không dùng latest để tránh deploy nhầm." |
+| 07:30 - 08:30 | Zoom job CD: `Deploy to Docker Swarm via SSH`. | "Sau khi CI pass và security scan pass, CD tự SSH vào manager để update service bằng image mới." |
+| 08:30 - 09:10 | Terminal manager: chạy `docker service ls` và `docker service ps <SWARM_SERVICE_NAME>`. | "Đây là bằng chứng rollout đã hoàn tất và service đang chạy image mới trên cụm Swarm." |
+| 09:10 - 10:00 | Mở `https://523h0020.site`, hard refresh (Ctrl+F5), chỉ biểu tượng khóa HTTPS và heading mới. | "Website public qua HTTPS đã cập nhật đúng thay đổi giao diện vừa commit." |
+| 10:00 - 11:00 | Mở Grafana dashboard ID 1860 và 193. Trên terminal 3 chạy load nhẹ để biểu đồ biến thiên rõ. | "Grafana đang hiển thị CPU, RAM và metrics container theo thời gian thực. Khi có traffic, biểu đồ nhảy ngay." |
+| 11:00 - 12:20 | Mô phỏng lỗi trên manager: lấy container app và `docker rm -f <CONTAINER_ID>`, sau đó chạy `docker service ps <SWARM_SERVICE_NAME>`. | "Em vừa tắt cưỡng bức một container. Swarm tự phát hiện lệch desired state và tự tạo task mới. Đây là self-healing." |
+| 12:20 - 13:10 | Quay lại website + Grafana để chứng minh hệ thống vẫn online và metric phản ánh sự kiện lỗi/phục hồi. | "Dù có lỗi runtime, hệ thống vẫn phục vụ bình thường và tự phục hồi, đúng yêu cầu production-grade." |
+| 13:10 - 13:40 | Kết thúc bằng checklist tổng kết. | "Tổng kết: có thay đổi code, CI/CD tự động, security gate, semantic versioning, HTTPS public domain, monitoring và self-healing." |
 
-## Command block ready-to-use (for copy while recording)
+## 3) Lệnh dùng trực tiếp khi quay
 
 ```bash
-# 1) Commit and push
+# A. Commit & push
 git status
 git add .
-git commit -m "feat(ui): demo visible banner for release"
+git commit -m "feat(ui): update visible demo heading"
 git push origin main
 
-# 2) Verify Swarm rollout
+# B. Kiểm tra rollout trên Swarm
 docker service ls
 docker service ps <SWARM_SERVICE_NAME>
 
-# 3) Generate load for visible metrics
+# C. Tạo traffic để dashboard nhảy rõ
 while true; do curl -s https://523h0020.site > /dev/null; sleep 0.3; done
 
-# 4) Simulate failure + self-healing
+# D. Mô phỏng lỗi và kiểm tra self-healing
 docker ps --filter name=<SWARM_SERVICE_NAME>
 docker rm -f <CONTAINER_ID>
 docker service ps <SWARM_SERVICE_NAME>
 ```
 
-## Quick mapping for GitLab CI (if you use GitLab instead of GitHub)
+## 4) Checklist bằng chứng bắt buộc trong video
 
-- Replace "Actions" screen with "CI/CD -> Pipelines".
-- Keep the same narration order: lint -> Trivy security gate -> semantic tags -> deploy job.
-- Evidence remains identical: Docker Hub tags, HTTPS UI update, Grafana metrics, self-healing.
+- [ ] Có sửa UI trước khi push.
+- [ ] Có màn hình pipeline chạy tự động.
+- [ ] Có nhấn mạnh Trivy security scan fail gate.
+- [ ] Có nhấn mạnh semantic tags và không dùng `latest`.
+- [ ] Có màn hình job CD update service.
+- [ ] Có website `https://523h0020.site` với thay đổi mới.
+- [ ] Có dashboard Grafana đang cập nhật metric.
+- [ ] Có mô phỏng lỗi và bằng chứng tự phục hồi.
+
+## 5) Nếu dùng GitLab thay vì GitHub
+
+- Thay màn hình `Actions` bằng `CI/CD -> Pipelines`.
+- Giữ nguyên trình tự thuyết minh: CI -> Security scan -> Versioning -> CD -> Verify web -> Grafana -> Self-healing.

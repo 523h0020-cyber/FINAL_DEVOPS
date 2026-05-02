@@ -153,6 +153,39 @@ resource "aws_security_group" "edge" {
     }
   }
 
+  # ── Docker Swarm internal communication (self-referencing) ──
+  ingress {
+    description     = "Swarm cluster management"
+    from_port       = 2377
+    to_port         = 2377
+    protocol        = "tcp"
+    self            = true
+  }
+
+  ingress {
+    description     = "Swarm node discovery (TCP)"
+    from_port       = 7946
+    to_port         = 7946
+    protocol        = "tcp"
+    self            = true
+  }
+
+  ingress {
+    description     = "Swarm node discovery (UDP)"
+    from_port       = 7946
+    to_port         = 7946
+    protocol        = "udp"
+    self            = true
+  }
+
+  ingress {
+    description     = "VXLAN overlay network"
+    from_port       = 4789
+    to_port         = 4789
+    protocol        = "udp"
+    self            = true
+  }
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
