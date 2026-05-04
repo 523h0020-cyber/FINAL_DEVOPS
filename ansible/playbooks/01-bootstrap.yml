@@ -5,6 +5,9 @@
   gather_facts: true
 
   vars:
+    docker_users:
+      - ubuntu
+      - root
     common_packages_debian:
       - ca-certificates
       - curl
