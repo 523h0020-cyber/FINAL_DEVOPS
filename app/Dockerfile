@@ -18,8 +18,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dumb-init to handle signals properly
-RUN apk add --no-cache dumb-init
+# Install dumb-init and upgrade OS packages to patch vulnerabilities (e.g. tar CVE-2026-31802)
+RUN apk upgrade --no-cache && \
+    apk add --no-cache dumb-init
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs
