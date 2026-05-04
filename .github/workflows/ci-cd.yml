@@ -184,9 +184,9 @@ jobs:
         if: env.ORCHESTRATOR == 'swarm'
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SWARM_MANAGER_HOST }}
-          username: ${{ secrets.SWARM_MANAGER_USER }}
-          key: ${{ secrets.SWARM_SSH_PRIVATE_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
           script: |
             docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" -p "${{ secrets.DOCKERHUB_TOKEN }}"
