@@ -20,7 +20,8 @@ WORKDIR /app
 
 # Install dumb-init and upgrade OS packages to patch vulnerabilities (e.g. tar CVE-2026-31802)
 RUN apk upgrade --no-cache && \
-    apk add --no-cache dumb-init
+    apk add --no-cache dumb-init && \
+    npm install -g npm@latest
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs
