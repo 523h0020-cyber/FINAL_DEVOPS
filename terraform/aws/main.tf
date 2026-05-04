@@ -2,25 +2,6 @@ provider "aws" {
   region = var.region
 }
 
-data "aws_availability_zones" "available" {
-  state = "available"
-}
-
-data "aws_ami" "al2023" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*-x86_64"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
 locals {
   is_swarm   = var.deployment_mode == "swarm"
   is_k8s     = var.deployment_mode == "kubernetes"
@@ -55,7 +36,7 @@ resource "aws_subnet" "public" {
 
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = data.aws_availability_zones.available.names[count.index % length(data.aws_availability_zones.available.names)]
+  availability_zone       = "${var.region}${count.index == 0 ? "a" : "b"}"
   map_public_ip_on_launch = true
 
   tags = merge(local.tags, {
@@ -69,7 +50,7 @@ resource "aws_subnet" "private" {
 
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.private_subnet_cidrs[count.index]
-  availability_zone       = data.aws_availability_zones.available.names[count.index % length(data.aws_availability_zones.available.names)]
+  availability_zone       = "${var.region}${count.index == 0 ? "a" : "b"}"
   map_public_ip_on_launch = false
 
   tags = merge(local.tags, {
@@ -200,9 +181,9 @@ resource "aws_security_group" "edge" {
 }
 
 resource "aws_instance" "swarm_nodes" {
-  count = local.is_swarm ? 3 : 0
+  count = local.is_swarm ? 2 : 0
 
-  ami                         = data.aws_ami.al2023.id
+  ami                         = "ami-0fc5d935ebf8bc3bc" # Ubuntu 22.04 LTS (us-east-1)
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.public[count.index % length(aws_subnet.public)].id
   vpc_security_group_ids      = [aws_security_group.edge.id]
