@@ -80,6 +80,48 @@ worker1 ansible_host=$WORKER_IP ansible_user=ubuntu ansible_ssh_private_key_file
 EOF
 echo -e "${GREEN}✅ Đã cập nhật xong file host cho Ansible ($HOSTS_FILE).${NC}"
 
+# Kiểm tra và Cài đặt tự động GitHub CLI nếu chưa có
+if ! command -v gh &> /dev/null; then
+    echo -e "${YELLOW}📦 Máy chưa cài GitHub CLI (\`gh\`). Đang tiến hành cài đặt tự động...${NC}"
+    (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
+    && sudo mkdir -p -m 755 /etc/apt/keyrings \
+    && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+    && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && sudo apt update \
+    && sudo apt install gh -y
+    echo -e "${GREEN}✅ Cài đặt GitHub CLI thành công!${NC}"
+fi
+
+if command -v gh &> /dev/null; then
+    # Thử login tự động bằng GITHUB_TOKEN truyền từ .env nếu chưa login
+    if [ -n "$GITHUB_TOKEN" ]; then
+        echo -e "${YELLOW}🔑 Đang sử dụng GITHUB_TOKEN để xác thực...${NC}"
+        echo "$GITHUB_TOKEN" | gh auth login --with-token &> /dev/null || true
+    fi
+
+    if gh auth status &> /dev/null; then
+        echo -e "${YELLOW}🔐 Đang tự động đồng bộ lên GitHub Secrets...${NC}"
+        gh secret set SSH_HOST --body "$MANAGER_IP"
+        gh secret set SSH_PRIVATE_KEY < "$PEM_FILE"
+        gh secret set SSH_USER --body "ubuntu"
+        gh secret set SWARM_SERVICE_NAME --body "app_service" # Đổi tên này thành tên docker swarm service name tương ứng của bạn
+
+        # Setup thêm DOCKERHUB secrets nếu người dùng nhập trong .env
+        if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            gh secret set DOCKERHUB_USERNAME --body "$DOCKERHUB_USERNAME"
+            gh secret set DOCKERHUB_TOKEN --body "$DOCKERHUB_TOKEN"
+            echo -e "${GREEN}✅ GitHub Secrets (SSH_HOST, SSH_PRIVATE_KEY, SSH_USER, SWARM_SERVICE_NAME, và DOCKERHUB) đã được setup tự động!${NC}"
+        else
+            echo -e "${GREEN}✅ GitHub Secrets (cấu hình SSH) đã được setup! (Bỏ qua DOCKERHUB do chưa điền trong .env)${NC}"
+        fi
+    else
+        echo -e "${RED}⚠️  GitHub CLI chưa xác thực. Hãy cấp quyền bằng \`gh auth login\` hoặc thêm GITHUB_TOKEN vào .env.${NC}"
+    fi
+else
+    echo -e "${RED}⚠️  Quá trình cài đặt GitHub CLI thất bại. Bỏ qua cập nhật Github Secrets.${NC}"
+fi
+
 # 7. Xử lý "Swarm treo" do đổi IP
 echo -e "${YELLOW}🧹 Đang force-leave (Reset) Swarm cũ trên Manager & Worker...${NC}"
 # Sử dụng StrictHostKeyChecking=no để tránh lỗi xác nhận fingerprint khi IP đổi
@@ -99,11 +141,7 @@ clear
 TARGET_BRANCH=${GIT_BRANCH:-main}
 
 echo -e "${GREEN}🎉 HOÀN TẤT TỰ ĐỘNG HÓA!${NC}"
-echo -e "=========================================================="
-echo -e "Mọi thứ đã sống lại. File .pem vẫn ổn."
-echo -e "Hãy vào GitHub -> Settings -> Secrets and variables -> Actions"
-echo -e "Và CẬP NHẬT biến ${YELLOW}SSH_HOST${NC} thành IP dưới đây:"
-echo -e ""
+echo -e "👉 ${YELLOW}$WORKER_IP${NC}"
 echo -e "👉 ${YELLOW}$MANAGER_IP${NC}"
 echo -e ""
 
