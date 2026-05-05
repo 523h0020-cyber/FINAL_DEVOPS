@@ -1,3 +1,9 @@
+# Lấy đường dẫn tuyệt đối của chính file script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+# Chuyển vào thư mục đó
+cd "$SCRIPT_DIR"
+
 #!/bin/bash
 set -e
 
@@ -26,13 +32,56 @@ fi
 echo -e "${GREEN}✅ Đã có Ansible.${NC}"
 
 # 3. Load cấu hình .env (Nơi bạn copy AWS Learner Lab token)
-if [ -f ".env" ]; then
-    echo -e "${YELLOW}📦 Đang nạp cấu hình AWS từ file .env...${NC}"
-    export $(grep -v '^#' .env | xargs)
-else
-    echo -e "${RED}❌ Không tìm thấy file ssh_auto/.env.${NC}"
-    echo -e "Vui lòng copy từ .env.example, đổi tên thành .env và điền Token AWS Learner Lab mới nhất."
-    exit 1
+if [ ! -f ".env" ]; then
+    echo -e "${YELLOW}📋 File .env chưa tồn tại. Đang tự động copy từ .env.example...${NC}"
+    cp .env.example .env
+    echo -e "${GREEN}✅ Đã tạo file .env từ template.${NC}"
+    echo -e "${YELLOW}⚠️  Vui lòng cập nhật các giá trị AWS credentials trong file .env:${NC}"
+    echo -e "   - AWS_ACCESS_KEY_ID"
+    echo -e "   - AWS_SECRET_ACCESS_KEY"
+    echo -e "   - AWS_SESSION_TOKEN (nếu dùng AWS Learner Lab)"
+    echo -e ""
+    echo -en "${YELLOW}Bạn đã cập nhật .env xong chưa? (y/n): ${NC}"
+    read confirm
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        echo -e "${RED}Vui lòng cập nhật file .env và chạy lại script.${NC}"
+        exit 1
+    fi
+fi
+
+echo -e "${YELLOW}📦 Đang nạp cấu hình AWS từ file .env...${NC}"
+export $(grep -v '^#' .env | xargs)
+
+# 3.5 Interactive setup cho các giá trị optional (GitHub, Docker Hub)
+echo -e ""
+echo -en "${YELLOW}Có muốn cập nhật các giá trị GitHub/Docker Hub ngay bây giờ? (y/n): ${NC}"
+read setup_choice
+if [ "$setup_choice" = "y" ] || [ "$setup_choice" = "Y" ]; then
+    echo -e ""
+    echo -e "${YELLOW}🔧 Nhập các thông tin bên dưới (bỏ qua nếu không cần):${NC}"
+    
+    read -p "GitHub Personal Token (GITHUB_TOKEN) [leave blank to skip]: " input_github_token
+    if [ -n "$input_github_token" ]; then
+        sed -i "s|^# GITHUB_TOKEN=.*|GITHUB_TOKEN=$input_github_token|" .env
+        export GITHUB_TOKEN="$input_github_token"
+        echo -e "${GREEN}✅ Đã cập nhật GITHUB_TOKEN${NC}"
+    fi
+    
+    read -p "Docker Hub Username (DOCKERHUB_USERNAME) [leave blank to skip]: " input_docker_user
+    if [ -n "$input_docker_user" ]; then
+        sed -i "s|^# DOCKERHUB_USERNAME=.*|DOCKERHUB_USERNAME=$input_docker_user|" .env
+        export DOCKERHUB_USERNAME="$input_docker_user"
+        echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_USERNAME${NC}"
+    fi
+    
+    read -sp "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: " input_docker_token
+    if [ -n "$input_docker_token" ]; then
+        sed -i "s|^# DOCKERHUB_TOKEN=.*|DOCKERHUB_TOKEN=$input_docker_token|" .env
+        export DOCKERHUB_TOKEN="$input_docker_token"
+        echo -e ""
+        echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_TOKEN${NC}"
+    fi
+    echo -e ""
 fi
 
 # 4. Kiểm tra file .pem và cấp quyền 400
@@ -54,7 +103,7 @@ echo -e "${YELLOW}🔍 Đang lấy 2 IP mới nhất từ AWS của cụm Swarm.
 # Tìm máy Manager (dựa vào tags)
 MANAGER_IP=$(aws ec2 describe-instances \
     --filters "Name=tag:Role,Values=manager" "Name=instance-state-name,Values=running" \
-    --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
+    --query "Reservations[*].Instances[*].PublicIpAddress" --output text | head -n 1)
 
 # Tìm máy Worker (dựa vào tags)
 WORKER_IP=$(aws ec2 describe-instances \
@@ -128,6 +177,8 @@ echo -e "${YELLOW}🧹 Đang force-leave (Reset) Swarm cũ trên Manager & Worke
 ssh -o StrictHostKeyChecking=no -i "$PEM_FILE" ubuntu@$WORKER_IP "sudo docker swarm leave --force" 2>/dev/null || true
 ssh -o StrictHostKeyChecking=no -i "$PEM_FILE" ubuntu@$MANAGER_IP "sudo docker swarm leave --force" 2>/dev/null || true
 echo -e "${GREEN}✅ Đã dọn dẹp Swarm state.${NC}"
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$MANAGER_IP" 2>/dev/null || true
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$WORKER_IP" 2>/dev/null || true
 
 # 8. Chạy lại Ansible để dựng Swarm mới tinh
 echo -e "${YELLOW}⚙️ Đang kích hoạt Ansible tạo lại Swarm...${NC}"
