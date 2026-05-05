@@ -4,6 +4,8 @@ networks:
   monitoring:
     driver: overlay
     attachable: true
+    traefik-public:       
+     external: true
 
 volumes:
   prometheus_data:
@@ -12,8 +14,10 @@ volumes:
 configs:
   prometheus_config:
     file: ./prometheus/prometheus.yml
+    name: prometheus_config${CONFIG_VERSION}
   grafana_datasource:
     file: ./grafana/provisioning/datasources/datasource.yml
+    name: grafana_datasource${CONFIG_VERSION}
 
 services:
   node-exporter:
@@ -68,6 +72,7 @@ services:
       - prometheus_data:/prometheus
     networks:
       - monitoring
+      - traefik-public
     ports:
       - target: 9090
         published: 9090
@@ -75,6 +80,12 @@ services:
         mode: host
     deploy:
       replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN_NAME}`)"
+        - "traefik.http.routers.prometheus.entrypoints=websecure"
+        - "traefik.http.routers.prometheus.tls=true"
+        - "traefik.http.routers.prometheus.tls.certresolver=le"
       placement:
         constraints:
           - node.role == manager
@@ -101,6 +112,12 @@ services:
         mode: host
     deploy:
       replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN_NAME}`)"
+        - "traefik.http.routers.grafana.entrypoints=websecure"
+        - "traefik.http.routers.grafana.tls=true"
+        - "traefik.http.routers.grafana.tls.certresolver=le"
       placement:
         constraints:
           - node.role == manager

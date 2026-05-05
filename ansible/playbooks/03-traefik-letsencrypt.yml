@@ -62,3 +62,4 @@
       until: "'1/1' in traefik_replicas.stdout"
       retries: 12
       delay: 5
+

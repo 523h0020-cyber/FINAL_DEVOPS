@@ -1,18 +1,22 @@
+#!/bin/bash
+
 # Lấy đường dẫn tuyệt đối của chính file script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-
-# Chuyển vào thư mục đó
-cd "$SCRIPT_DIR"
-
-#!/bin/bash
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 set -e
 
 # Màu sắc cho Terminal
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m' # No 
 
+# --- Bổ sung bước Terraform vào đầu script ---
+echo -e "${YELLOW}🚀 Đang kiểm tra hạ tầng bằng Terraform...${NC}"
+cd "$PROJECT_ROOT/terraform"
+terraform init
+terraform apply -auto-approve
+cd "$SCRIPT_DIR"
 echo -e "${YELLOW}🚀 BẮT ĐẦU QUY TRÌNH TỰ ĐỘNG KHÔI PHỤC LAB...${NC}"
 
 # 1. Kiểm tra AWS CLI
@@ -33,26 +37,26 @@ echo -e "${GREEN}✅ Đã có Ansible.${NC}"
 
 # 3. Load cấu hình .env (Nơi bạn copy AWS Learner Lab token)
 if [ ! -f ".env" ]; then
-    echo -e "${YELLOW}📋 File .env chưa tồn tại. Đang tự động copy từ .env.example...${NC}"
-    cp .env.example .env
-    echo -e "${GREEN}✅ Đã tạo file .env từ template.${NC}"
-    echo -e "${YELLOW}⚠️  Vui lòng cập nhật các giá trị AWS credentials trong file .env:${NC}"
-    echo -e "   - AWS_ACCESS_KEY_ID"
-    echo -e "   - AWS_SECRET_ACCESS_KEY"
-    echo -e "   - AWS_SESSION_TOKEN (nếu dùng AWS Learner Lab)"
-    echo -e ""
-    echo -en "${YELLOW}Bạn đã cập nhật .env xong chưa? (y/n): ${NC}"
-    read confirm
-    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-        echo -e "${RED}Vui lòng cập nhật file .env và chạy lại script.${NC}"
-        exit 1
+    if [ -f ".env.example" ]; then
+        cp .env.example .env
+        echo -e "${GREEN}✅ Đã tạo file .env từ template.${NC}"
+    else
+        touch .env
+        echo -e "${YELLOW}📋 Đã tạo file .env mới.${NC}"
     fi
+    echo -e "${RED}⚠️ Vui lòng cập nhật AWS Credentials vào file .env rồi chạy lại!${NC}"
+    exit 1
 fi
 
 echo -e "${YELLOW}📦 Đang nạp cấu hình AWS từ file .env...${NC}"
 export $(grep -v '^#' .env | xargs)
 
 # 3.5 Interactive setup cho các giá trị optional (GitHub, Docker Hub)
+# --- Phần cấu hình cho Monitoring ---
+# Kiểm tra nếu chưa có biến trong .env thì hỏi/gán mặc định
+export GF_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
+export GF_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
+export CONFIG_VERSION=$(date +%s) # Dùng timestamp để làm version cho Docker Config (tránh lỗi Immutable)
 echo -e ""
 echo -en "${YELLOW}Có muốn cập nhật các giá trị GitHub/Docker Hub ngay bây giờ? (y/n): ${NC}"
 read setup_choice
@@ -83,17 +87,28 @@ if [ "$setup_choice" = "y" ] || [ "$setup_choice" = "Y" ]; then
     fi
     echo -e ""
 fi
+if [[ -z "$DOMAIN_NAME" ]]; then
+    # Lấy domain cũ từ .env nếu có, nếu không thì để mặc định
+    DEFAULT_DOMAIN=$(grep DOMAIN_NAME .env | cut -d '=' -f2)
+    read -p "Nhập Domain của bạn [${DEFAULT_DOMAIN:-523h0020.site}]: " INPUT_DOMAIN
+    DOMAIN_NAME=${INPUT_DOMAIN:-${DEFAULT_DOMAIN:-523h0020.site}}
+    
+    # Lưu lại vào .env để lần sau không phải nhập lại
+    sed -i "/^DOMAIN_NAME=/d" .env
+    echo "DOMAIN_NAME=$DOMAIN_NAME" >> .env
+fi
+export DOMAIN_NAME
+
+
 
 # 4. Kiểm tra file .pem và cấp quyền 400
 # Lưu ý: Cấu hình mặc định tìm file final-devops-key.pem ở thư mục gốc
-PEM_FILE="../final-devops-key.pem" 
+PEM_FILE="$PROJECT_ROOT/final-devops-key.pem" 
 if [ -f "$PEM_FILE" ]; then
-    # Cấp đúng quyền bảo mật cho khóa SSH trong Linux/WSL
     chmod 400 "$PEM_FILE"
-    echo -e "${GREEN}✅ Đã set quyền 400 thành công cho $PEM_FILE.${NC}"
+    echo -e "${GREEN}✅ Đã bảo mật khóa SSH: $PEM_FILE${NC}"
 else
-    echo -e "${RED}❌ Không tìm thấy khóa SSH ($PEM_FILE).${NC}"
-    echo -e "Hãy tải file .pem từ AWS và để vào thư mục gốc của project (ngang hàng với ssh_auto/)."
+    echo -e "${RED}❌ Lỗi: Không thấy file $PEM_FILE. Kiểm tra lại config Terraform!${NC}"
     exit 1
 fi
 
@@ -119,8 +134,9 @@ echo -e "   📍 ${GREEN}Manager IP: $MANAGER_IP${NC}"
 echo -e "   📍 ${GREEN}Worker IP: $WORKER_IP${NC}"
 
 # 6. Ghi đè thông tin IP mới vào Ansible hosts.ini
-HOSTS_FILE="../ansible/inventory/hosts.ini"
-cat <<EOF > "$HOSTS_FILE"
+HOSTS_FILE="$PROJECT_ROOT/ansible/inventory/hosts.ini"
+mkdir -p "$(dirname "$HOSTS_FILE")"
+cat > "$HOSTS_FILE" <<EOF
 [managers]
 manager1 ansible_host=$MANAGER_IP ansible_user=ubuntu ansible_ssh_private_key_file=../final-devops-key.pem
 
@@ -180,10 +196,30 @@ echo -e "${GREEN}✅ Đã dọn dẹp Swarm state.${NC}"
 ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$MANAGER_IP" 2>/dev/null || true
 ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$WORKER_IP" 2>/dev/null || true
 
-# 8. Chạy lại Ansible để dựng Swarm mới tinh
-echo -e "${YELLOW}⚙️ Đang kích hoạt Ansible tạo lại Swarm...${NC}"
-cd ../ansible
-ansible-playbook -i inventory/hosts.ini playbooks/01-bootstrap.yml
+
+# 8. Chạy Ansible để cấu hình Server và Docker Swarm
+echo -e "${YELLOW}⚙️ Đang chạy Ansible cấu hình hệ thống với domain: ${DOMAIN_NAME}${NC}"
+
+# Chuyển vào thư mục ansible
+cd "$PROJECT_ROOT/ansible"
+
+# Thực thi Playbook
+ansible-playbook -i inventory/hosts.ini \
+    playbooks/01-bootstrap.yml \
+    playbooks/02-swarm-setup.yml \
+    playbooks/03-trafik-letsencrypt.yml \
+    --extra-vars "domain_name=${DOMAIN_NAME} letsencrypt_email=admin@${DOMAIN_NAME}"
+
+# Kiểm tra nếu Ansible chạy lỗi thì dừng script
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ Ansible bị lỗi! Dừng quá trình auto-fix.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Cấu hình Ansible hoàn tất.${NC}"
+
+# Quay lại thư mục gốc để chuẩn bị cho bước Monitoring tiếp theo
+cd "$PROJECT_ROOT"
 
 # 9. In kết quả cuối cùng
 clear
@@ -214,3 +250,63 @@ while true; do
     esac
 done
 echo -e "=========================================================="
+# --- PHASE 5: MONITORING DEPLOYMENT ---
+
+echo -e "${YELLOW}📊 Đang cấu hình hệ thống giám sát cho Domain: ${DOMAIN_NAME}${NC}"
+
+# 1. Khai báo các biến bổ sung cho Monitoring
+export CONFIG_VERSION=$(date +%s)
+# Lấy Admin User/Pass từ .env hoặc mặc định
+GF_USER=${GF_SECURITY_ADMIN_USER:-admin}
+GF_PASS=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
+
+# 2. Chuyển vào thư mục chứa stack monitoring
+cd "$PROJECT_ROOT/monitoring"
+
+# 3. Deploy Stack Monitoring 
+# Lưu ý: Chúng ta truyền DOMAIN_NAME vào để file YAML bốc được
+DOMAIN_NAME=$DOMAIN_NAME \
+CONFIG_VERSION=$CONFIG_VERSION \
+GF_SECURITY_ADMIN_USER=$GF_USER \
+GF_SECURITY_ADMIN_PASSWORD=$GF_PASS \
+docker stack deploy -c docker-stack.monitoring.yml monitoring --with-registry-auth
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Phase 5 hoàn tất!${NC}"
+    echo -e "${CYAN}-------------------------------------------------------${NC}"
+    echo -e "${WHITE}🔗 Grafana:    https://grafana.${DOMAIN_NAME}${NC}"
+    echo -e "${WHITE}🔗 Prometheus: https://prometheus.${DOMAIN_NAME}${NC}"
+    echo -e "${CYAN}-------------------------------------------------------${NC}"
+else
+    echo -e "${RED}❌ Lỗi khi triển khai Phase 5.${NC}"
+    exit 1
+fi
+
+# Quay lại thư mục gốc
+cd "$PROJECT_ROOT"
+
+# --- PHẦN DỌN DẸP CONFIG RÁC (CLEANUP) ---
+
+echo -e "${YELLOW}🧹 Đang dọn dẹp các Docker Config cũ không còn sử dụng...${NC}"
+
+# Đợi một chút để Swarm cập nhật Service sang Config mới
+sleep 5
+
+# Lấy danh sách tất cả các config của stack monitoring
+# Sau đó lọc ra những config không gắn với service nào (unused)
+UNUSED_CONFIGS=$(docker config ls --filter "label=com.docker.stack.namespace=monitoring" -q)
+
+if [ -n "$UNUSED_CONFIGS" ]; then
+    for config_id in $UNUSED_CONFIGS; do
+        # Kiểm tra xem config có đang được dùng không (docker sẽ báo lỗi nếu đang dùng)
+        if ! docker service inspect $(docker service ls -q) --format '{{.Spec.TaskTemplate.ContainerSpec.Configs}}' | grep -q "$config_id"; then
+            docker config rm "$config_id" > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                echo -e "${BLUE}  - Đã xóa config cũ: $config_id${NC}"
+            fi
+        fi
+    done
+    echo -e "${GREEN}✨ Đã dọn dẹp xong các bản ghi cũ!${NC}"
+else
+    echo -e "${CYAN}ℹ️ Không có config rác nào cần dọn dẹp.${NC}"
+fi

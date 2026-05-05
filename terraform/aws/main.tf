@@ -13,6 +13,39 @@ locals {
   }
 }
 
+# ──────────────────────────────────────────────────────────────────
+# Auto-generate SSH Keypair (Optional, based on auto_generate_keypair)
+# ──────────────────────────────────────────────────────────────────
+resource "tls_private_key" "generated" {
+  count     = var.auto_generate_keypair ? 1 : 0
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "generated" {
+  count           = var.auto_generate_keypair ? 1 : 0
+  key_name        = var.ssh_key_name
+  public_key      = tls_private_key.generated[0].public_key_openssh
+
+  tags = merge(local.tags, {
+    Name = "${var.project_name}-keypair"
+  })
+
+  lifecycle {
+    ignore_changes = [public_key]
+  }
+}
+
+resource "local_file" "private_key" {
+  count             = var.auto_generate_keypair ? 1 : 0
+  filename          = var.keypair_output_path
+  content           = tls_private_key.generated[0].private_key_pem
+  file_permission   = "0400"
+  sensitive_content = true
+
+  
+}
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true

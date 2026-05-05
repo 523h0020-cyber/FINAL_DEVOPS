@@ -46,9 +46,21 @@ variable "instance_type" {
 }
 
 variable "ssh_key_name" {
-  description = "Optional EC2 Key Pair name for SSH access."
+  description = "EC2 Key Pair name. If not provided, Terraform will auto-generate one."
   type        = string
-  default     = null
+  default     = "final-devops-key"
+}
+
+variable "auto_generate_keypair" {
+  description = "Auto-generate keypair in Terraform if true. Set to false if you already have one in AWS."
+  type        = bool
+  default     = true
+}
+
+variable "keypair_output_path" {
+  description = "Path where private key will be saved (relative to project root)."
+  type        = string
+  default     = "../final-devops-key.pem"
 }
 
 variable "k8s_version" {
