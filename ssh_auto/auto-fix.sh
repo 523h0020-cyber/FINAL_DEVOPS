@@ -100,7 +100,9 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 echo -e "${YELLOW}📦 Đang nạp cấu hình từ file .env...${NC}"
-export $(grep -v '^#' "$ENV_FILE" | xargs)
+set -a
+  . ./.env
+set +a
 
 # Kiểm tra nhanh xem đã nạp được Access Key chưa, nếu chưa có thì cũng gọi Setup
 if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$AWS_SESSION_TOKEN" ]; then
