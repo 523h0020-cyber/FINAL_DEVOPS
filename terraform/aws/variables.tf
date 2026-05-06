@@ -58,9 +58,11 @@ variable "auto_generate_keypair" {
 }
 
 variable "keypair_output_path" {
-  description = "Path where private key will be saved (relative to project root)."
+  description = "Path where private key will be saved. Relative to terraform/aws/ directory."
   type        = string
-  default     = "../final-devops-key.pem"
+  # ./final-devops-key.pem = terraform/aws/final-devops-key.pem
+  # Khớp với SSH_KEY="$TERRAFORM_DIR/final-devops-key.pem" trong auto-fix.sh
+  default     = "./final-devops-key.pem"
 }
 
 variable "k8s_version" {

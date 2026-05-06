@@ -36,14 +36,13 @@ resource "aws_key_pair" "generated" {
   }
 }
 
-resource "local_file" "private_key" {
-  count             = var.auto_generate_keypair ? 1 : 0
-  filename          = var.keypair_output_path
-  content           = tls_private_key.generated[0].private_key_pem
-  file_permission   = "0400"
-  sensitive_content = true
-
-  
+# local_sensitive_file tự động ẩn nội dung key khỏi logs và đặt permission 0600
+# Thay thế local_file vì sensitive_content=true không hợp lệ trong local provider v2+
+resource "local_sensitive_file" "private_key" {
+  count           = var.auto_generate_keypair ? 1 : 0
+  filename        = var.keypair_output_path
+  content         = tls_private_key.generated[0].private_key_pem
+  file_permission = "0400"
 }
 
 resource "aws_vpc" "main" {
@@ -222,6 +221,10 @@ resource "aws_instance" "swarm_nodes" {
   vpc_security_group_ids      = [aws_security_group.edge.id]
   associate_public_ip_address = true
   key_name                    = var.ssh_key_name
+
+  # Đảm bảo Key Pair đã được upload lên AWS trước khi tạo EC2
+  # Tránh lỗi InvalidKeyPair.NotFound khi auto_generate_keypair = true
+  depends_on = [aws_key_pair.generated]
 
   tags = merge(local.tags, {
     Name = "${var.project_name}-swarm-${count.index + 1}"
