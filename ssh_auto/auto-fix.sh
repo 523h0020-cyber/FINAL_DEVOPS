@@ -191,14 +191,22 @@ export DOMAIN_NAME
 
 # --- PHASE 4: KIỂM TRA SSH KEY & LẤY IP ---
 
-# 4. Kiểm tra file .pem và cấp quyền 400
-if [ -f "$SSH_KEY" ]; then
-    chmod 400 "$SSH_KEY"
-    echo -e "${GREEN}✅ Đã bảo mật khóa SSH: $SSH_KEY${NC}"
-else
+# 4. Kiểm tra file .pem
+if [ ! -f "$SSH_KEY" ]; then
     echo -e "${RED}❌ Lỗi: Không thấy file $SSH_KEY. Kiểm tra lại config Terraform!${NC}"
     exit 1
 fi
+
+# WSL FIX: chmod 0400 không có tác dụng trên /mnt/c/ (NTFS mount của Windows).
+# Giải pháp: Copy key sang Linux filesystem thật (~/.ssh/) nơi chmod hoạt động đúng.
+WSL_SSH_KEY="$HOME/.ssh/final-devops-key.pem"
+mkdir -p "$HOME/.ssh"
+cp "$SSH_KEY" "$WSL_SSH_KEY"
+chmod 600 "$WSL_SSH_KEY"
+
+# Cập nhật biến SSH_KEY trỏ sang bản copy trên Linux filesystem
+SSH_KEY="$WSL_SSH_KEY"
+echo -e "${GREEN}✅ SSH key đã được sao chép sang Linux filesystem và bảo mật tại: $SSH_KEY${NC}"
 
 # 5. Dùng AWS CLI tự động lấy IP hiện tại
 echo -e "${YELLOW}🔍 Đang lấy 2 IP mới nhất từ AWS của cụm Swarm...${NC}"
