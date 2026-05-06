@@ -118,16 +118,7 @@ upsert_env() {
     sed -i "/^#\{0,1\}[[:space:]]*${key}=/d" "$ENV_FILE"    # Thêm dòng mới
     echo "${key}=${value}" >> "$ENV_FILE"
 }
-read_secret() {
-      local prompt="$1"
-      local secret=""
-      printf "%s" "$prompt" >&2
-      IFS= read -r -s secret
-      echo "" >&2
-      # Loại CR nếu paste từ clipboard Windows
-      secret="${secret%$'\r'}"
-      printf "%s" "$secret"
-  }
+
 # --- PHASE 2: TERRAFORM — Chuẩn bị hạ tầng ---
 echo -e "${YELLOW}🚀 Đang chuẩn bị hạ tầng với Terraform...${NC}"
 
@@ -175,7 +166,8 @@ if [ "$setup_choice" = "y" ] || [ "$setup_choice" = "Y" ]; then
         echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_USERNAME${NC}"
     fi
     
-    input_docker_token="$(read_secret "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: ")"
+    read -rp "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: " 
+    
     if [ -n "$input_docker_token" ]; then
         upsert_env "DOCKERHUB_TOKEN" "$input_docker_token"
         export DOCKERHUB_TOKEN="$input_docker_token"
@@ -283,7 +275,7 @@ echo -e "${GREEN}✅ Đã cập nhật xong file host cho Ansible ($HOSTS_FILE).
  if [ -z "${DOCKERHUB_USERNAME:-}" ] || [ -z "${DOCKERHUB_TOKEN:-}" ]; then
       echo -e "${YELLOW}⚠️ Thiếu DOCKERHUB_USERNAME/DOCKERHUB_TOKEN trong .env.${NC}"
       read -p "Nhập Docker Hub Username: " input_docker_user_force
-      input_docker_token_force="$(read_secret "Nhập Docker Hub Token: ")"
+      read -rp "Nhập Docker Hub Token: " input_docker_token_force
       echo ""
       if [ -z "$input_docker_user_force" ] || [ -z "$input_docker_token_force" ]; then
           echo -e "${RED}❌ Không thể tiếp tục CI/CD nếu thiếu DockerHub credentials.${NC}"
