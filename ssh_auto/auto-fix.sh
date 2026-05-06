@@ -76,21 +76,13 @@ echo -e "${GREEN}✅ Đã có Ansible.${NC}"
 
 # --- PHASE 3: CẤU HÌNH .ENV ---
 
-# 3. Load cấu hình .env (Nơi bạn copy AWS Learner Lab token)
-if [ ! -f "$ENV_FILE" ]; then
-    if [ -f "$ENV_EXAMPLE" ]; then
-        cp "$ENV_EXAMPLE" "$ENV_FILE"
-        echo -e "${GREEN}✅ Đã tạo file .env từ template.${NC}"
-    else
-        touch "$ENV_FILE"
-        echo -e "${YELLOW}📋 Đã tạo file .env mới.${NC}"
-    fi
-    echo -e "${RED}⚠️ Vui lòng cập nhật AWS Credentials vào file $ENV_FILE rồi chạy lại!${NC}"
-    exit 1
+# Nạp cấu hình từ .env (Nếu không có file, các lệnh sau có thể lỗi do thiếu Credentials)
+if [ -f "$ENV_FILE" ]; then
+    echo -e "${YELLOW}📦 Đang nạp cấu hình từ file .env...${NC}"
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+else
+    echo -e "${RED}⚠️ Cảnh báo: Không tìm thấy file .env. Hãy chạy lab-setup.sh trước!${NC}"
 fi
-
-echo -e "${YELLOW}📦 Đang nạp cấu hình AWS từ file .env...${NC}"
-export $(grep -v '^#' "$ENV_FILE" | xargs)
 
 # 3.5 Interactive setup cho các giá trị optional (GitHub, Docker Hub)
 # --- Phần cấu hình cho Monitoring ---
