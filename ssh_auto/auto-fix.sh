@@ -118,7 +118,16 @@ upsert_env() {
     sed -i "/^#\{0,1\}[[:space:]]*${key}=/d" "$ENV_FILE"    # Thêm dòng mới
     echo "${key}=${value}" >> "$ENV_FILE"
 }
-
+read_secret() {
+      local prompt="$1"
+      local secret=""
+      printf "%s" "$prompt"
+      IFS= read -r -s secret
+      echo ""
+      # Loại ký tự CR khi paste từ clipboard Windows
+      secret="${secret%$'\r'}"
+      printf "%s" "$secret"
+  }
 # --- PHASE 2: TERRAFORM — Chuẩn bị hạ tầng ---
 echo -e "${YELLOW}🚀 Đang chuẩn bị hạ tầng với Terraform...${NC}"
 
@@ -166,7 +175,7 @@ if [ "$setup_choice" = "y" ] || [ "$setup_choice" = "Y" ]; then
         echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_USERNAME${NC}"
     fi
     
-    read -sp "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: " input_docker_token
+    input_docker_token="$(read_secret "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: ")"
     if [ -n "$input_docker_token" ]; then
         upsert_env "DOCKERHUB_TOKEN" "$input_docker_token"
         export DOCKERHUB_TOKEN="$input_docker_token"
@@ -196,17 +205,33 @@ if [ ! -f "$SSH_KEY" ]; then
     exit 1
 fi
 
-# WSL FIX: chmod 0400 không có tác dụng trên /mnt/c/ (NTFS mount của Windows).
-# Giải pháp: Copy key sang Linux filesystem thật (~/.ssh/) nơi chmod hoạt động đúng.
-WSL_SSH_KEY="$HOME/.ssh/final-devops-key.pem"
-mkdir -p "$HOME/.ssh"
-cp "$SSH_KEY" "$WSL_SSH_KEY"
-chmod 600 "$WSL_SSH_KEY"
+# WSL KEY STAGING (không phụ thuộc cứng vào ~/.ssh)
+  # Ưu tiên ~/.ssh, nếu không ghi được thì fallback sang /tmp.
+  KEY_CANDIDATES=("$HOME/.ssh/final-devops-key.pem" "/tmp/final-devops-key.pem")
+  STAGED_KEY=""
 
-# Cập nhật biến SSH_KEY trỏ sang bản copy trên Linux filesystem
-SSH_KEY="$WSL_SSH_KEY"
-upsert_env "SSH_KEY_PATH" "$SSH_KEY"
-echo -e "${GREEN}✅ SSH key đã được sao chép sang Linux filesystem và bảo mật tại: $SSH_KEY${NC}"
+  for candidate in "${KEY_CANDIDATES[@]}"; do
+      target_dir="$(dirname "$candidate")"
+      mkdir -p "$target_dir" 2>/dev/null || true
+
+      if [ -w "$target_dir" ]; then
+          # install set luôn permission 600, gọn hơn cp + chmod
+          if install -m 600 "$SSH_KEY" "$candidate" 2>/dev/null; then
+              STAGED_KEY="$candidate"
+              break
+          fi
+      fi
+  done
+
+  if [ -z "$STAGED_KEY" ]; then
+      echo -e "${RED}❌ Không thể staging SSH key vào ~/.ssh hoặc /tmp.${NC}"
+      echo -e "${YELLOW}➡️ Chạy: sudo chown -R $(whoami):$(whoami) $HOME/.ssh && chmod 700 $HOME/.ssh${NC}"
+      exit 1
+  fi
+
+  SSH_KEY="$STAGED_KEY"
+  upsert_env "SSH_KEY_PATH" "$SSH_KEY"
+  echo -e "${GREEN}✅ SSH key đã staging và bảo mật tại: $SSH_KEY${NC}"
 
 # 5. Dùng AWS CLI tự động lấy IP hiện tại
 echo -e "${YELLOW}🔍 Đang lấy 2 IP mới nhất từ AWS của cụm Swarm...${NC}"
@@ -258,7 +283,7 @@ echo -e "${GREEN}✅ Đã cập nhật xong file host cho Ansible ($HOSTS_FILE).
  if [ -z "${DOCKERHUB_USERNAME:-}" ] || [ -z "${DOCKERHUB_TOKEN:-}" ]; then
       echo -e "${YELLOW}⚠️ Thiếu DOCKERHUB_USERNAME/DOCKERHUB_TOKEN trong .env.${NC}"
       read -p "Nhập Docker Hub Username: " input_docker_user_force
-      read -sp "Nhập Docker Hub Token: " input_docker_token_force
+      input_docker_token_force="$(read_secret "Nhập Docker Hub Token: ")"
       echo ""
       if [ -z "$input_docker_user_force" ] || [ -z "$input_docker_token_force" ]; then
           echo -e "${RED}❌ Không thể tiếp tục CI/CD nếu thiếu DockerHub credentials.${NC}"
