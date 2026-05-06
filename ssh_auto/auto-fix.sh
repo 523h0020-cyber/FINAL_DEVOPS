@@ -331,6 +331,41 @@ for ip in $WORKER_IPS; do
 done
 
 
+ # --- DNS GATE: xác nhận DNS trước khi tiếp tục ---
+  echo -e "${YELLOW}🌐 Kiểm tra DNS trước khi tiếp tục...${NC}"
+  echo -e "Cần trỏ các bản ghi sau về: ${GREEN}$MANAGER_IP${NC}"
+  echo -e "  - ${DOMAIN_NAME}"
+  echo -e "  - grafana.${DOMAIN_NAME}"
+  echo -e "  - prometheus.${DOMAIN_NAME}"
+
+  while true; do
+    read -p "Bạn đã cấu hình DNS trên TenTen xong chưa? (y/n): " dns_ready
+    case "$dns_ready" in
+      [Yy]*)
+        ROOT_IP=$(nslookup "$DOMAIN_NAME" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
+        GRAFANA_IP=$(nslookup "grafana.$DOMAIN_NAME" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
+        PROM_IP=$(nslookup "prometheus.$DOMAIN_NAME" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
+
+        if [ "$ROOT_IP" = "$MANAGER_IP" ] && [ "$GRAFANA_IP" = "$MANAGER_IP" ] && [ "$PROM_IP" = "$MANAGER_IP" ]; then
+          echo -e "${GREEN}✅ DNS đã đúng. Tiếp tục deploy...${NC}"
+          break
+        else
+          echo -e "${RED}❌ DNS chưa đúng.${NC}"
+          echo -e "  root:      ${ROOT_IP:-N/A}"
+          echo -e "  grafana:   ${GRAFANA_IP:-N/A}"
+          echo -e "  prometheus:${PROM_IP:-N/A}"
+        fi
+        ;;
+      [Nn]*)
+        echo -e "${YELLOW}⏸ Tạm dừng. Cấu hình DNS xong thì chạy lại script.${NC}"
+        exit 0
+        ;;
+      *)
+        echo "Vui lòng nhập y hoặc n."
+        ;;
+    esac
+  done
+
 # --- PHASE 4.6: ANSIBLE — Cấu hình Server & Docker Swarm ---
 
 # 8. Chạy Ansible để cấu hình Server và Docker Swarm
