@@ -1,23 +1,64 @@
 #!/bin/bash
 
-# Lấy đường dẫn tuyệt đối của chính file script
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+# ============================================================
+# 🔧 AUTO-FIX SCRIPT — Tự động hoá triển khai DevOps Pipeline
+# ============================================================
+
+# ===========================================
+# 1. XÁC ĐỊNH THƯ MỤC GỐC (PROJECT ROOT)
+#    Bất kể chạy script từ đâu, nó cũng sẽ
+#    tìm đúng gốc dự án.
+# ===========================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# ===========================================
+# 2. ĐỊNH NGHĨA CÁC ĐƯỜNG DẪN QUAN TRỌNG
+#    Tất cả đều dựa trên PROJECT_ROOT
+# ===========================================
+TERRAFORM_DIR="$PROJECT_ROOT/terraform/aws"
+MONITORING_DIR="$PROJECT_ROOT/monitoring"
+ANSIBLE_DIR="$PROJECT_ROOT/ansible"
+SSH_KEY="$TERRAFORM_DIR/final-devops-key.pem"
+ENV_FILE="$SCRIPT_DIR/.env"
+ENV_EXAMPLE="$SCRIPT_DIR/.env.example"
+HOSTS_FILE="$ANSIBLE_DIR/inventory/hosts.ini"
+
 set -e
 
 # Màu sắc cho Terminal
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No 
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# --- Bổ sung bước Terraform vào đầu script ---
-echo -e "${YELLOW}🚀 Đang kiểm tra hạ tầng bằng Terraform...${NC}"
-cd "$PROJECT_ROOT/terraform"
-terraform init
+# --- PHASE 1: TERRAFORM — Chuẩn bị hạ tầng ---
+echo -e "${YELLOW}🚀 Đang chuẩn bị hạ tầng với Terraform...${NC}"
+
+cd "$TERRAFORM_DIR" || { echo -e "${RED}❌ Không tìm thấy thư mục Terraform tại: $TERRAFORM_DIR${NC}"; exit 1; }
+
+# Khởi tạo (init) nếu chưa có thư mục .terraform
+if [ ! -d ".terraform" ]; then
+    terraform init
+fi
+
+# Chạy apply — -auto-approve để không phải gõ 'yes' thủ công
 terraform apply -auto-approve
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ Terraform apply thất bại!${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Hạ tầng đã sẵn sàng.${NC}"
+
+# QUAN TRỌNG: Quay lại thư mục script để các lệnh sau không bị lệch đường dẫn
 cd "$SCRIPT_DIR"
-echo -e "${YELLOW}🚀 BẮT ĐẦU QUY TRÌNH TỰ ĐỘNG KHÔI PHỤC LAB...${NC}"
+
+# --- PHASE 2: KIỂM TRA CÔNG CỤ ---
 
 # 1. Kiểm tra AWS CLI
 if ! command -v aws &> /dev/null; then
@@ -35,21 +76,23 @@ if ! command -v ansible-playbook &> /dev/null; then
 fi
 echo -e "${GREEN}✅ Đã có Ansible.${NC}"
 
+# --- PHASE 3: CẤU HÌNH .ENV ---
+
 # 3. Load cấu hình .env (Nơi bạn copy AWS Learner Lab token)
-if [ ! -f ".env" ]; then
-    if [ -f ".env.example" ]; then
-        cp .env.example .env
+if [ ! -f "$ENV_FILE" ]; then
+    if [ -f "$ENV_EXAMPLE" ]; then
+        cp "$ENV_EXAMPLE" "$ENV_FILE"
         echo -e "${GREEN}✅ Đã tạo file .env từ template.${NC}"
     else
-        touch .env
+        touch "$ENV_FILE"
         echo -e "${YELLOW}📋 Đã tạo file .env mới.${NC}"
     fi
-    echo -e "${RED}⚠️ Vui lòng cập nhật AWS Credentials vào file .env rồi chạy lại!${NC}"
+    echo -e "${RED}⚠️ Vui lòng cập nhật AWS Credentials vào file $ENV_FILE rồi chạy lại!${NC}"
     exit 1
 fi
 
 echo -e "${YELLOW}📦 Đang nạp cấu hình AWS từ file .env...${NC}"
-export $(grep -v '^#' .env | xargs)
+export $(grep -v '^#' "$ENV_FILE" | xargs)
 
 # 3.5 Interactive setup cho các giá trị optional (GitHub, Docker Hub)
 # --- Phần cấu hình cho Monitoring ---
@@ -66,21 +109,21 @@ if [ "$setup_choice" = "y" ] || [ "$setup_choice" = "Y" ]; then
     
     read -p "GitHub Personal Token (GITHUB_TOKEN) [leave blank to skip]: " input_github_token
     if [ -n "$input_github_token" ]; then
-        sed -i "s|^# GITHUB_TOKEN=.*|GITHUB_TOKEN=$input_github_token|" .env
+        sed -i "s|^# GITHUB_TOKEN=.*|GITHUB_TOKEN=$input_github_token|" "$ENV_FILE"
         export GITHUB_TOKEN="$input_github_token"
         echo -e "${GREEN}✅ Đã cập nhật GITHUB_TOKEN${NC}"
     fi
     
     read -p "Docker Hub Username (DOCKERHUB_USERNAME) [leave blank to skip]: " input_docker_user
     if [ -n "$input_docker_user" ]; then
-        sed -i "s|^# DOCKERHUB_USERNAME=.*|DOCKERHUB_USERNAME=$input_docker_user|" .env
+        sed -i "s|^# DOCKERHUB_USERNAME=.*|DOCKERHUB_USERNAME=$input_docker_user|" "$ENV_FILE"
         export DOCKERHUB_USERNAME="$input_docker_user"
         echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_USERNAME${NC}"
     fi
     
     read -sp "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: " input_docker_token
     if [ -n "$input_docker_token" ]; then
-        sed -i "s|^# DOCKERHUB_TOKEN=.*|DOCKERHUB_TOKEN=$input_docker_token|" .env
+        sed -i "s|^# DOCKERHUB_TOKEN=.*|DOCKERHUB_TOKEN=$input_docker_token|" "$ENV_FILE"
         export DOCKERHUB_TOKEN="$input_docker_token"
         echo -e ""
         echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_TOKEN${NC}"
@@ -89,26 +132,26 @@ if [ "$setup_choice" = "y" ] || [ "$setup_choice" = "Y" ]; then
 fi
 if [[ -z "$DOMAIN_NAME" ]]; then
     # Lấy domain cũ từ .env nếu có, nếu không thì để mặc định
-    DEFAULT_DOMAIN=$(grep DOMAIN_NAME .env | cut -d '=' -f2)
+    DEFAULT_DOMAIN=$(grep DOMAIN_NAME "$ENV_FILE" | cut -d '=' -f2)
     read -p "Nhập Domain của bạn [${DEFAULT_DOMAIN:-523h0020.site}]: " INPUT_DOMAIN
     DOMAIN_NAME=${INPUT_DOMAIN:-${DEFAULT_DOMAIN:-523h0020.site}}
     
     # Lưu lại vào .env để lần sau không phải nhập lại
-    sed -i "/^DOMAIN_NAME=/d" .env
-    echo "DOMAIN_NAME=$DOMAIN_NAME" >> .env
+    sed -i "/^DOMAIN_NAME=/d" "$ENV_FILE"
+    echo "DOMAIN_NAME=$DOMAIN_NAME" >> "$ENV_FILE"
 fi
 export DOMAIN_NAME
 
 
 
+# --- PHASE 4: KIỂM TRA SSH KEY & LẤY IP ---
+
 # 4. Kiểm tra file .pem và cấp quyền 400
-# Lưu ý: Cấu hình mặc định tìm file final-devops-key.pem ở thư mục gốc
-PEM_FILE="$PROJECT_ROOT/final-devops-key.pem" 
-if [ -f "$PEM_FILE" ]; then
-    chmod 400 "$PEM_FILE"
-    echo -e "${GREEN}✅ Đã bảo mật khóa SSH: $PEM_FILE${NC}"
+if [ -f "$SSH_KEY" ]; then
+    chmod 400 "$SSH_KEY"
+    echo -e "${GREEN}✅ Đã bảo mật khóa SSH: $SSH_KEY${NC}"
 else
-    echo -e "${RED}❌ Lỗi: Không thấy file $PEM_FILE. Kiểm tra lại config Terraform!${NC}"
+    echo -e "${RED}❌ Lỗi: Không thấy file $SSH_KEY. Kiểm tra lại config Terraform!${NC}"
     exit 1
 fi
 
@@ -134,16 +177,17 @@ echo -e "   📍 ${GREEN}Manager IP: $MANAGER_IP${NC}"
 echo -e "   📍 ${GREEN}Worker IP: $WORKER_IP${NC}"
 
 # 6. Ghi đè thông tin IP mới vào Ansible hosts.ini
-HOSTS_FILE="$PROJECT_ROOT/ansible/inventory/hosts.ini"
 mkdir -p "$(dirname "$HOSTS_FILE")"
 cat > "$HOSTS_FILE" <<EOF
 [managers]
-manager1 ansible_host=$MANAGER_IP ansible_user=ubuntu ansible_ssh_private_key_file=../final-devops-key.pem
+manager1 ansible_host=$MANAGER_IP ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY
 
 [workers]
-worker1 ansible_host=$WORKER_IP ansible_user=ubuntu ansible_ssh_private_key_file=../final-devops-key.pem
+worker1 ansible_host=$WORKER_IP ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY
 EOF
 echo -e "${GREEN}✅ Đã cập nhật xong file host cho Ansible ($HOSTS_FILE).${NC}"
+
+# --- GITHUB CLI: CÀI ĐẶT & SETUP SECRETS ---
 
 # Kiểm tra và Cài đặt tự động GitHub CLI nếu chưa có
 if ! command -v gh &> /dev/null; then
@@ -168,7 +212,7 @@ if command -v gh &> /dev/null; then
     if gh auth status &> /dev/null; then
         echo -e "${YELLOW}🔐 Đang tự động đồng bộ lên GitHub Secrets...${NC}"
         gh secret set SSH_HOST --body "$MANAGER_IP"
-        gh secret set SSH_PRIVATE_KEY < "$PEM_FILE"
+        gh secret set SSH_PRIVATE_KEY < "$SSH_KEY"
         gh secret set SSH_USER --body "ubuntu"
         gh secret set SWARM_SERVICE_NAME --body "app_service" # Đổi tên này thành tên docker swarm service name tương ứng của bạn
 
@@ -187,21 +231,25 @@ else
     echo -e "${RED}⚠️  Quá trình cài đặt GitHub CLI thất bại. Bỏ qua cập nhật Github Secrets.${NC}"
 fi
 
+# --- PHASE 4.5: RESET DOCKER SWARM ---
+
 # 7. Xử lý "Swarm treo" do đổi IP
 echo -e "${YELLOW}🧹 Đang force-leave (Reset) Swarm cũ trên Manager & Worker...${NC}"
 # Sử dụng StrictHostKeyChecking=no để tránh lỗi xác nhận fingerprint khi IP đổi
-ssh -o StrictHostKeyChecking=no -i "$PEM_FILE" ubuntu@$WORKER_IP "sudo docker swarm leave --force" 2>/dev/null || true
-ssh -o StrictHostKeyChecking=no -i "$PEM_FILE" ubuntu@$MANAGER_IP "sudo docker swarm leave --force" 2>/dev/null || true
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$WORKER_IP "sudo docker swarm leave --force" 2>/dev/null || true
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP "sudo docker swarm leave --force" 2>/dev/null || true
 echo -e "${GREEN}✅ Đã dọn dẹp Swarm state.${NC}"
 ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$MANAGER_IP" 2>/dev/null || true
 ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$WORKER_IP" 2>/dev/null || true
 
 
+# --- PHASE 4.6: ANSIBLE — Cấu hình Server & Docker Swarm ---
+
 # 8. Chạy Ansible để cấu hình Server và Docker Swarm
 echo -e "${YELLOW}⚙️ Đang chạy Ansible cấu hình hệ thống với domain: ${DOMAIN_NAME}${NC}"
 
 # Chuyển vào thư mục ansible
-cd "$PROJECT_ROOT/ansible"
+cd "$ANSIBLE_DIR"
 
 # Thực thi Playbook
 ansible-playbook -i inventory/hosts.ini \
@@ -218,8 +266,10 @@ fi
 
 echo -e "${GREEN}✅ Cấu hình Ansible hoàn tất.${NC}"
 
-# Quay lại thư mục gốc để chuẩn bị cho bước Monitoring tiếp theo
+# Quay lại thư mục gốc để chuẩn bị cho bước tiếp theo
 cd "$PROJECT_ROOT"
+
+# --- KẾT QUẢ VÀ GIT PUSH ---
 
 # 9. In kết quả cuối cùng
 clear
@@ -238,7 +288,7 @@ while true; do
     case $yn in
         [Yy]* ) 
             echo -e "\n${GREEN}🚀 Đang thực hiện push code lên nhánh $TARGET_BRANCH...${NC}"
-            cd .. # Lùi ra thư mục gốc để chạy git
+            cd "$PROJECT_ROOT"
             git push origin "$TARGET_BRANCH"
             echo -e "${GREEN}✅ Đã push thành công! Hãy mở tab Actions trên GitHub để xem tiến trình chạy CI/CD.${NC}"
             break;;
@@ -250,6 +300,7 @@ while true; do
     esac
 done
 echo -e "=========================================================="
+
 # --- PHASE 5: MONITORING DEPLOYMENT ---
 
 echo -e "${YELLOW}📊 Đang cấu hình hệ thống giám sát cho Domain: ${DOMAIN_NAME}${NC}"
@@ -261,7 +312,7 @@ GF_USER=${GF_SECURITY_ADMIN_USER:-admin}
 GF_PASS=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
 
 # 2. Chuyển vào thư mục chứa stack monitoring
-cd "$PROJECT_ROOT/monitoring"
+cd "$MONITORING_DIR" || { echo -e "${RED}❌ Không tìm thấy thư mục Monitoring tại: $MONITORING_DIR${NC}"; exit 1; }
 
 # 3. Deploy Stack Monitoring 
 # Lưu ý: Chúng ta truyền DOMAIN_NAME vào để file YAML bốc được
