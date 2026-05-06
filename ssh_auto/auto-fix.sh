@@ -40,10 +40,8 @@ echo -e "${YELLOW}🚀 Đang chuẩn bị hạ tầng với Terraform...${NC}"
 
 cd "$TERRAFORM_DIR" || { echo -e "${RED}❌ Không tìm thấy thư mục Terraform tại: $TERRAFORM_DIR${NC}"; exit 1; }
 
-# Khởi tạo (init) nếu chưa có thư mục .terraform
-if [ ! -d ".terraform" ]; then
-    terraform init
-fi
+# Khởi tạo và đồng bộ lock file (-upgrade đảm bảo lock file luôn khớp với providers)
+terraform init -upgrade
 
 # Chạy apply — -auto-approve để không phải gõ 'yes' thủ công
 terraform apply -auto-approve
