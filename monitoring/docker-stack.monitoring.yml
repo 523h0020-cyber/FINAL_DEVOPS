@@ -4,8 +4,8 @@ networks:
   monitoring:
     driver: overlay
     attachable: true
-    traefik-public:       
-     external: true
+  traefik-public:
+    external: true
 
 volumes:
   prometheus_data:
@@ -28,7 +28,7 @@ services:
       - --path.rootfs=/rootfs
       - --collector.systemd
       - --collector.processes
-      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -73,11 +73,6 @@ services:
     networks:
       - monitoring
       - traefik-public
-    ports:
-      - target: 9090
-        published: 9090
-        protocol: tcp
-        mode: host
     deploy:
       replicas: 1
       labels:
@@ -86,6 +81,8 @@ services:
         - "traefik.http.routers.prometheus.entrypoints=websecure"
         - "traefik.http.routers.prometheus.tls=true"
         - "traefik.http.routers.prometheus.tls.certresolver=le"
+        # FIX: Thêm port để Traefik biết forward vào đúng port container
+        - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
       placement:
         constraints:
           - node.role == manager
@@ -105,11 +102,7 @@ services:
       - grafana_data:/var/lib/grafana
     networks:
       - monitoring
-    ports:
-      - target: 3000
-        published: 3000
-        protocol: tcp
-        mode: host
+      - traefik-public
     deploy:
       replicas: 1
       labels:
@@ -118,6 +111,8 @@ services:
         - "traefik.http.routers.grafana.entrypoints=websecure"
         - "traefik.http.routers.grafana.tls=true"
         - "traefik.http.routers.grafana.tls.certresolver=le"
+        # FIX: Thêm port để Traefik biết forward vào đúng port container
+        - "traefik.http.services.grafana.loadbalancer.server.port=3000"
       placement:
         constraints:
           - node.role == manager

@@ -2,8 +2,6 @@ version: '3.8'
 
 services:
   app:
-    # Hình ảnh Docker (tuân thủ nguyên tắc Không dùng latest)
-    # Phiên bản có thể bị ghi đè lúc deploy bằng docker service update
     image: ${DOCKER_IMAGE:-giang/final-tier4-app}:${APP_VERSION:-v1.0.1}
     environment:
       - NODE_ENV=production
@@ -12,23 +10,25 @@ services:
     networks:
       - traefik-public
       - backend
+      - monitoring  # FIX: Thêm vào network monitoring để Prometheus scrape được metrics
     deploy:
       replicas: 3
       update_config:
         parallelism: 1
         delay: 10s
-        order: start-first
+        order: start-first  # Zero-downtime rolling update
       restart_policy:
         condition: on-failure
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.app.rule=Host(`523h0020.site`)"
+        # FIX: Dùng biến ${DOMAIN_NAME} thay vì hardcode domain
+        - "traefik.http.routers.app.rule=Host(`${DOMAIN_NAME}`)"
         - "traefik.http.routers.app.entrypoints=websecure"
-        - "traefik.http.routers.app.tls.certresolver=myresolver"
+        # FIX: Đồng bộ certresolver với Traefik config (dùng 'le' thay vì 'myresolver')
+        - "traefik.http.routers.app.tls.certresolver=le"
         - "traefik.http.services.app.loadbalancer.server.port=3000"
 
   mongodb:
-    # Tuyệt đối không dùng latest
     image: mongo:7.0.4
     volumes:
       - mongo-data:/data/db
@@ -47,6 +47,8 @@ networks:
     external: true
   backend:
     driver: overlay
+  monitoring:
+    external: true  # Dùng network overlay đã tạo bởi monitoring stack
 
 volumes:
   mongo-data:

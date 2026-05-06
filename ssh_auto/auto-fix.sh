@@ -118,13 +118,8 @@ cd "$TERRAFORM_DIR" || { echo -e "${RED}❌ Không tìm thấy thư mục Terraf
 # Khởi tạo và đồng bộ lock file
 terraform init -upgrade
 
-# Chạy apply
+# Chạy apply (set -e sẽ tự thoát nếu lỗi, không cần kiểm tra $? thêm)
 terraform apply -auto-approve
-
-if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ Terraform apply thất bại!${NC}"
-    exit 1
-fi
 
 echo -e "${GREEN}✅ Hạ tầng đã sẵn sàng.${NC}"
 
@@ -133,10 +128,10 @@ cd "$SCRIPT_DIR"
 
 # 3.5 Interactive setup cho các giá trị optional (GitHub, Docker Hub)
 # --- Phần cấu hình cho Monitoring ---
-# Kiểm tra nếu chưa có biến trong .env thì hỏi/gán mặc định
+# CONFIG_VERSION dùng timestamp — khai báo 1 lần duy nhất ở đây để dùng xuyên suốt
+export CONFIG_VERSION=$(date +%s)
 export GF_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
 export GF_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
-export CONFIG_VERSION=$(date +%s) # Dùng timestamp để làm version cho Docker Config (tránh lỗi Immutable)
 echo -e ""
 echo -en "${YELLOW}Có muốn cập nhật các giá trị GitHub/Docker Hub ngay bây giờ? (y/n): ${NC}"
 read setup_choice
@@ -146,21 +141,34 @@ if [ "$setup_choice" = "y" ] || [ "$setup_choice" = "Y" ]; then
     
     read -p "GitHub Personal Token (GITHUB_TOKEN) [leave blank to skip]: " input_github_token
     if [ -n "$input_github_token" ]; then
-        sed -i "s|^# GITHUB_TOKEN=.*|GITHUB_TOKEN=$input_github_token|" "$ENV_FILE"
+        # Match cả dòng active (GITHUB_TOKEN=) lẫn dòng bị comment (# GITHUB_TOKEN=)
+        if grep -q '^GITHUB_TOKEN=' "$ENV_FILE"; then
+            sed -i "s|^GITHUB_TOKEN=.*|GITHUB_TOKEN=$input_github_token|" "$ENV_FILE"
+        else
+            sed -i "s|^# GITHUB_TOKEN=.*|GITHUB_TOKEN=$input_github_token|" "$ENV_FILE"
+        fi
         export GITHUB_TOKEN="$input_github_token"
         echo -e "${GREEN}✅ Đã cập nhật GITHUB_TOKEN${NC}"
     fi
     
     read -p "Docker Hub Username (DOCKERHUB_USERNAME) [leave blank to skip]: " input_docker_user
     if [ -n "$input_docker_user" ]; then
-        sed -i "s|^# DOCKERHUB_USERNAME=.*|DOCKERHUB_USERNAME=$input_docker_user|" "$ENV_FILE"
+        if grep -q '^DOCKERHUB_USERNAME=' "$ENV_FILE"; then
+            sed -i "s|^DOCKERHUB_USERNAME=.*|DOCKERHUB_USERNAME=$input_docker_user|" "$ENV_FILE"
+        else
+            sed -i "s|^# DOCKERHUB_USERNAME=.*|DOCKERHUB_USERNAME=$input_docker_user|" "$ENV_FILE"
+        fi
         export DOCKERHUB_USERNAME="$input_docker_user"
         echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_USERNAME${NC}"
     fi
     
     read -sp "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: " input_docker_token
     if [ -n "$input_docker_token" ]; then
-        sed -i "s|^# DOCKERHUB_TOKEN=.*|DOCKERHUB_TOKEN=$input_docker_token|" "$ENV_FILE"
+        if grep -q '^DOCKERHUB_TOKEN=' "$ENV_FILE"; then
+            sed -i "s|^DOCKERHUB_TOKEN=.*|DOCKERHUB_TOKEN=$input_docker_token|" "$ENV_FILE"
+        else
+            sed -i "s|^# DOCKERHUB_TOKEN=.*|DOCKERHUB_TOKEN=$input_docker_token|" "$ENV_FILE"
+        fi
         export DOCKERHUB_TOKEN="$input_docker_token"
         echo -e ""
         echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_TOKEN${NC}"
@@ -216,11 +224,16 @@ echo -e "   📍 ${GREEN}Worker IP: $WORKER_IP${NC}"
 # 6. Ghi đè thông tin IP mới vào Ansible hosts.ini
 mkdir -p "$(dirname "$HOSTS_FILE")"
 cat > "$HOSTS_FILE" <<EOF
-[managers]
+# Group name phải khớp với 'hosts:' trong các Ansible playbook
+[manager]
 manager1 ansible_host=$MANAGER_IP ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY
 
 [workers]
 worker1 ansible_host=$WORKER_IP ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY
+
+[swarm:children]
+manager
+workers
 EOF
 echo -e "${GREEN}✅ Đã cập nhật xong file host cho Ansible ($HOSTS_FILE).${NC}"
 
@@ -291,16 +304,11 @@ cd "$ANSIBLE_DIR"
 # Thực thi Playbook
 ansible-playbook -i inventory/hosts.ini \
     playbooks/01-bootstrap.yml \
-    playbooks/02-swarm-setup.yml \
-    playbooks/03-trafik-letsencrypt.yml \
+    playbooks/02-swarm.yml \
+    playbooks/03-traefik-letsencrypt.yml \
     --extra-vars "domain_name=${DOMAIN_NAME} letsencrypt_email=admin@${DOMAIN_NAME}"
 
-# Kiểm tra nếu Ansible chạy lỗi thì dừng script
-if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ Ansible bị lỗi! Dừng quá trình auto-fix.${NC}"
-    exit 1
-fi
-
+# set -e sẽ tự thoát nếu ansible-playbook lỗi
 echo -e "${GREEN}✅ Cấu hình Ansible hoàn tất.${NC}"
 
 # Quay lại thư mục gốc để chuẩn bị cho bước tiếp theo
@@ -342,8 +350,7 @@ echo -e "=========================================================="
 
 echo -e "${YELLOW}📊 Đang cấu hình hệ thống giám sát cho Domain: ${DOMAIN_NAME}${NC}"
 
-# 1. Khai báo các biến bổ sung cho Monitoring
-export CONFIG_VERSION=$(date +%s)
+# CONFIG_VERSION đã được khai báo ở Phase 1, dùng lại ở đây để đảm bảo nhất quán
 # Lấy Admin User/Pass từ .env hoặc mặc định
 GF_USER=${GF_SECURITY_ADMIN_USER:-admin}
 GF_PASS=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
@@ -377,24 +384,33 @@ cd "$PROJECT_ROOT"
 
 echo -e "${YELLOW}🧹 Đang dọn dẹp các Docker Config cũ không còn sử dụng...${NC}"
 
-# Đợi một chút để Swarm cập nhật Service sang Config mới
-sleep 5
+# Đợi Swarm converge và cập nhật Service sang Config mới
+sleep 10
 
-# Lấy danh sách tất cả các config của stack monitoring
-# Sau đó lọc ra những config không gắn với service nào (unused)
-UNUSED_CONFIGS=$(docker config ls --filter "label=com.docker.stack.namespace=monitoring" -q)
+# Lấy danh sách TẤT CẢ config ID đang được service trong stack monitoring sử dụng (ACTIVE)
+ACTIVE_CONFIG_IDS=$(ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
+    "docker service inspect \$(docker service ls --filter label=com.docker.stack.namespace=monitoring -q) \
+    --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{.ConfigID}} {{end}}'" 2>/dev/null | tr ' ' '\n' | sort -u)
 
-if [ -n "$UNUSED_CONFIGS" ]; then
-    for config_id in $UNUSED_CONFIGS; do
-        # Kiểm tra xem config có đang được dùng không (docker sẽ báo lỗi nếu đang dùng)
-        if ! docker service inspect $(docker service ls -q) --format '{{.Spec.TaskTemplate.ContainerSpec.Configs}}' | grep -q "$config_id"; then
-            docker config rm "$config_id" > /dev/null 2>&1
-            if [ $? -eq 0 ]; then
-                echo -e "${BLUE}  - Đã xóa config cũ: $config_id${NC}"
-            fi
+# Lấy TẤT CẢ config thuộc namespace monitoring
+ALL_CONFIGS=$(ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
+    "docker config ls --filter label=com.docker.stack.namespace=monitoring -q" 2>/dev/null)
+
+DELETED=0
+if [ -n "$ALL_CONFIGS" ]; then
+    for config_id in $ALL_CONFIGS; do
+        # Chỉ xóa config KHÔNG nằm trong danh sách active
+        if ! echo "$ACTIVE_CONFIG_IDS" | grep -q "$config_id"; then
+            ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
+                "docker config rm $config_id" > /dev/null 2>&1 && \
+            echo -e "${BLUE}  - Đã xóa config cũ: $config_id${NC}"
+            DELETED=$((DELETED + 1))
         fi
     done
-    echo -e "${GREEN}✨ Đã dọn dẹp xong các bản ghi cũ!${NC}"
+fi
+
+if [ "$DELETED" -gt 0 ]; then
+    echo -e "${GREEN}✨ Đã dọn dẹp $DELETED config cũ!${NC}"
 else
     echo -e "${CYAN}ℹ️ Không có config rác nào cần dọn dẹp.${NC}"
 fi
