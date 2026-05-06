@@ -121,10 +121,11 @@ upsert_env() {
 read_secret() {
       local prompt="$1"
       local secret=""
-      printf "%s" "$prompt"
+      # In prompt ra stderr để vẫn thấy khi dùng command substitution
+      printf "%s" "$prompt" >&2
       IFS= read -r -s secret
-      echo ""
-      # Loại ký tự CR khi paste từ clipboard Windows
+      echo "" >&2
+      # Loại CR nếu paste từ clipboard Windows
       secret="${secret%$'\r'}"
       printf "%s" "$secret"
   }
