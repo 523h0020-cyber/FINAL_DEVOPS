@@ -35,15 +35,90 @@ WHITE='\033[1;37m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# --- PHASE 1: TERRAFORM — Chuẩn bị hạ tầng ---
+# --- PHASE 0: KIỂM TRA & CÀI ĐẶT CÔNG CỤ ---
+echo -e "${CYAN}🛠 Đang kiểm tra các công cụ cần thiết...${NC}"
+
+# 1. Kiểm tra Terraform
+if ! command -v terraform &> /dev/null; then
+    echo -en "${YELLOW}⚠️ Chưa thấy Terraform. Bạn có muốn cài đặt tự động không? (y/n): ${NC}"
+    read install_tf
+    if [[ "$install_tf" =~ ^[Yy]$ ]]; then
+        sudo apt-get update && sudo apt-get install -y gnupg software-properties-common
+        wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+        sudo apt-get update && sudo apt-get install terraform -y
+        echo -e "${GREEN}✅ Đã cài đặt Terraform.${NC}"
+    else
+        echo -e "${RED}❌ Thiếu Terraform. Script không thể tiếp tục.${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✅ Đã có Terraform.${NC}"
+fi
+
+# 2. Kiểm tra AWS CLI
+if ! command -v aws &> /dev/null; then
+    echo -en "${YELLOW}⚠️ Chưa thấy AWS CLI. Bạn có muốn cài đặt tự động không? (y/n): ${NC}"
+    read install_aws
+    if [[ "$install_aws" =~ ^[Yy]$ ]]; then
+        sudo apt-get update && sudo apt-get install -y unzip curl
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip -q awscliv2.zip
+        sudo ./aws/install
+        rm -rf awscliv2.zip aws/
+        echo -e "${GREEN}✅ Đã cài đặt AWS CLI.${NC}"
+    else
+        echo -e "${RED}❌ Thiếu AWS CLI. Script không thể tiếp tục.${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✅ Đã có AWS CLI.${NC}"
+fi
+
+# 3. Kiểm tra Ansible
+if ! command -v ansible-playbook &> /dev/null; then
+    echo -en "${YELLOW}⚠️ Chưa thấy Ansible. Bạn có muốn cài đặt tự động không? (y/n): ${NC}"
+    read install_ansible
+    if [[ "$install_ansible" =~ ^[Yy]$ ]]; then
+        sudo apt-get update && sudo apt-get install -y ansible
+        echo -e "${GREEN}✅ Đã cài đặt Ansible.${NC}"
+    else
+        echo -e "${RED}❌ Thiếu Ansible. Script không thể tiếp tục.${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✅ Đã có Ansible.${NC}"
+fi
+
+# --- PHASE 1: NẠP CẤU HÌNH ---
+
+# Nạp cấu hình từ .env (Cực kỳ quan trọng để Terraform và AWS CLI có quyền chạy)
+if [ ! -f "$ENV_FILE" ]; then
+    echo -e "${YELLOW}ℹ️ Không tìm thấy file .env. Tự động chuyển sang chế độ Setup...${NC}"
+    bash "$SCRIPT_DIR/lab-setup.sh"
+    exit 0 # Kết thúc phiên này để phiên do lab-setup.sh gọi lấy quyền điều khiển
+fi
+
+echo -e "${YELLOW}📦 Đang nạp cấu hình từ file .env...${NC}"
+export $(grep -v '^#' "$ENV_FILE" | xargs)
+
+# Kiểm tra nhanh xem đã nạp được Access Key chưa, nếu chưa có thì cũng gọi Setup
+if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SESSION_TOKEN" ]; then
+    echo -e "${RED}⚠️ Cảnh báo: File .env thiếu thông tin Credentials quan trọng.${NC}"
+    echo -e "${YELLOW}🔄 Đang khởi động lại quá trình Setup...${NC}"
+    bash "$SCRIPT_DIR/lab-setup.sh"
+    exit 0
+fi
+
+# --- PHASE 2: TERRAFORM — Chuẩn bị hạ tầng ---
 echo -e "${YELLOW}🚀 Đang chuẩn bị hạ tầng với Terraform...${NC}"
 
 cd "$TERRAFORM_DIR" || { echo -e "${RED}❌ Không tìm thấy thư mục Terraform tại: $TERRAFORM_DIR${NC}"; exit 1; }
 
-# Khởi tạo và đồng bộ lock file (-upgrade đảm bảo lock file luôn khớp với providers)
+# Khởi tạo và đồng bộ lock file
 terraform init -upgrade
 
-# Chạy apply — -auto-approve để không phải gõ 'yes' thủ công
+# Chạy apply
 terraform apply -auto-approve
 
 if [ $? -ne 0 ]; then
@@ -53,36 +128,8 @@ fi
 
 echo -e "${GREEN}✅ Hạ tầng đã sẵn sàng.${NC}"
 
-# QUAN TRỌNG: Quay lại thư mục script để các lệnh sau không bị lệch đường dẫn
+# Quay lại thư mục script
 cd "$SCRIPT_DIR"
-
-# --- PHASE 2: KIỂM TRA CÔNG CỤ ---
-
-# 1. Kiểm tra AWS CLI
-if ! command -v aws &> /dev/null; then
-    echo -e "${RED}❌ Lỗi: Chưa cài đặt AWS CLI.${NC}"
-    echo -e "Hãy chạy: curl \"https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip\" -o \"awscliv2.zip\" && unzip awscliv2.zip && sudo ./aws/install"
-    exit 1
-fi
-echo -e "${GREEN}✅ Đã có AWS CLI.${NC}"
-
-# 2. Kiểm tra Ansible
-if ! command -v ansible-playbook &> /dev/null; then
-    echo -e "${RED}❌ Lỗi: Chưa cài đặt Ansible.${NC}"
-    echo -e "Hãy chạy: sudo apt update && sudo apt install -y ansible"
-    exit 1
-fi
-echo -e "${GREEN}✅ Đã có Ansible.${NC}"
-
-# --- PHASE 3: CẤU HÌNH .ENV ---
-
-# Nạp cấu hình từ .env (Nếu không có file, các lệnh sau có thể lỗi do thiếu Credentials)
-if [ -f "$ENV_FILE" ]; then
-    echo -e "${YELLOW}📦 Đang nạp cấu hình từ file .env...${NC}"
-    export $(grep -v '^#' "$ENV_FILE" | xargs)
-else
-    echo -e "${RED}⚠️ Cảnh báo: Không tìm thấy file .env. Hãy chạy lab-setup.sh trước!${NC}"
-fi
 
 # 3.5 Interactive setup cho các giá trị optional (GitHub, Docker Hub)
 # --- Phần cấu hình cho Monitoring ---
