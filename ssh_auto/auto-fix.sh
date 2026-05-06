@@ -121,7 +121,6 @@ upsert_env() {
 read_secret() {
       local prompt="$1"
       local secret=""
-      # In prompt ra stderr để vẫn thấy khi dùng command substitution
       printf "%s" "$prompt" >&2
       IFS= read -r -s secret
       echo "" >&2
