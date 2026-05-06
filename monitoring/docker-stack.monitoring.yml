@@ -2,8 +2,8 @@ version: "3.9"
 
 networks:
   monitoring:
-    driver: overlay
-    attachable: true
+    external: true
+    name: monitoring
   traefik-public:
     external: true
 
@@ -118,3 +118,4 @@ services:
           - node.role == manager
       restart_policy:
         condition: on-failure
+

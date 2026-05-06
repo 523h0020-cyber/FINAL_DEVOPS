@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 # ============================================================
 # 🔧 AUTO-FIX SCRIPT — Tự động hoá triển khai DevOps Pipeline
@@ -22,7 +22,7 @@ ANSIBLE_DIR="$PROJECT_ROOT/ansible"
 SSH_KEY="$TERRAFORM_DIR/final-devops-key.pem"
 ENV_FILE="$SCRIPT_DIR/.env"
 ENV_EXAMPLE="$SCRIPT_DIR/.env.example"
-HOSTS_FILE="$ANSIBLE_DIR/inventory/hosts.ini"
+HOSTS_FILE="$ANSIBLE_DIR/inventories/production/hosts.ini"
 
 set -e
 
@@ -103,12 +103,21 @@ echo -e "${YELLOW}📦 Đang nạp cấu hình từ file .env...${NC}"
 export $(grep -v '^#' "$ENV_FILE" | xargs)
 
 # Kiểm tra nhanh xem đã nạp được Access Key chưa, nếu chưa có thì cũng gọi Setup
-if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SESSION_TOKEN" ]; then
-    echo -e "${RED}⚠️ Cảnh báo: File .env thiếu thông tin Credentials quan trọng.${NC}"
+if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$AWS_SESSION_TOKEN" ]; then
+    echo -e "${RED}⚠️ Cảnh báo: File .env thiếu thông tin Credentials quan trọng (Access Key, Secret Key hoặc Session Token).${NC}"
     echo -e "${YELLOW}🔄 Đang khởi động lại quá trình Setup...${NC}"
     bash "$SCRIPT_DIR/lab-setup.sh"
     exit 0
 fi
+
+# --- HÀM UPSERT BIẾN .ENV ---
+upsert_env() {
+    local key=$1
+    local value=$2
+    # Xoá dòng cũ nếu có (bất kể là có bị comment hay không)
+    sed -i "/^#\{0,1\}[[:space:]]*${key}=/d" "$ENV_FILE"    # Thêm dòng mới
+    echo "${key}=${value}" >> "$ENV_FILE"
+}
 
 # --- PHASE 2: TERRAFORM — Chuẩn bị hạ tầng ---
 echo -e "${YELLOW}🚀 Đang chuẩn bị hạ tầng với Terraform...${NC}"
@@ -128,10 +137,14 @@ cd "$SCRIPT_DIR"
 
 # 3.5 Interactive setup cho các giá trị optional (GitHub, Docker Hub)
 # --- Phần cấu hình cho Monitoring ---
-# CONFIG_VERSION dùng timestamp — khai báo 1 lần duy nhất ở đây để dùng xuyên suốt
+# CONFIG_VERSION dùng timestamp — Luôn tạo mới để tránh conflict config cũ
 export CONFIG_VERSION=$(date +%s)
+upsert_env "CONFIG_VERSION" "$CONFIG_VERSION"
+
 export GF_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
 export GF_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
+upsert_env "GF_SECURITY_ADMIN_USER" "$GF_ADMIN_USER"
+upsert_env "GF_SECURITY_ADMIN_PASSWORD" "$GF_ADMIN_PASSWORD"
 echo -e ""
 echo -en "${YELLOW}Có muốn cập nhật các giá trị GitHub/Docker Hub ngay bây giờ? (y/n): ${NC}"
 read setup_choice
@@ -141,34 +154,21 @@ if [ "$setup_choice" = "y" ] || [ "$setup_choice" = "Y" ]; then
     
     read -p "GitHub Personal Token (GITHUB_TOKEN) [leave blank to skip]: " input_github_token
     if [ -n "$input_github_token" ]; then
-        # Match cả dòng active (GITHUB_TOKEN=) lẫn dòng bị comment (# GITHUB_TOKEN=)
-        if grep -q '^GITHUB_TOKEN=' "$ENV_FILE"; then
-            sed -i "s|^GITHUB_TOKEN=.*|GITHUB_TOKEN=$input_github_token|" "$ENV_FILE"
-        else
-            sed -i "s|^# GITHUB_TOKEN=.*|GITHUB_TOKEN=$input_github_token|" "$ENV_FILE"
-        fi
+        upsert_env "GITHUB_TOKEN" "$input_github_token"
         export GITHUB_TOKEN="$input_github_token"
         echo -e "${GREEN}✅ Đã cập nhật GITHUB_TOKEN${NC}"
     fi
     
     read -p "Docker Hub Username (DOCKERHUB_USERNAME) [leave blank to skip]: " input_docker_user
     if [ -n "$input_docker_user" ]; then
-        if grep -q '^DOCKERHUB_USERNAME=' "$ENV_FILE"; then
-            sed -i "s|^DOCKERHUB_USERNAME=.*|DOCKERHUB_USERNAME=$input_docker_user|" "$ENV_FILE"
-        else
-            sed -i "s|^# DOCKERHUB_USERNAME=.*|DOCKERHUB_USERNAME=$input_docker_user|" "$ENV_FILE"
-        fi
+        upsert_env "DOCKERHUB_USERNAME" "$input_docker_user"
         export DOCKERHUB_USERNAME="$input_docker_user"
         echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_USERNAME${NC}"
     fi
     
     read -sp "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: " input_docker_token
     if [ -n "$input_docker_token" ]; then
-        if grep -q '^DOCKERHUB_TOKEN=' "$ENV_FILE"; then
-            sed -i "s|^DOCKERHUB_TOKEN=.*|DOCKERHUB_TOKEN=$input_docker_token|" "$ENV_FILE"
-        else
-            sed -i "s|^# DOCKERHUB_TOKEN=.*|DOCKERHUB_TOKEN=$input_docker_token|" "$ENV_FILE"
-        fi
+        upsert_env "DOCKERHUB_TOKEN" "$input_docker_token"
         export DOCKERHUB_TOKEN="$input_docker_token"
         echo -e ""
         echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_TOKEN${NC}"
@@ -182,8 +182,7 @@ if [[ -z "$DOMAIN_NAME" ]]; then
     DOMAIN_NAME=${INPUT_DOMAIN:-${DEFAULT_DOMAIN:-523h0020.site}}
     
     # Lưu lại vào .env để lần sau không phải nhập lại
-    sed -i "/^DOMAIN_NAME=/d" "$ENV_FILE"
-    echo "DOMAIN_NAME=$DOMAIN_NAME" >> "$ENV_FILE"
+    upsert_env "DOMAIN_NAME" "$DOMAIN_NAME"
 fi
 export DOMAIN_NAME
 
@@ -206,28 +205,31 @@ chmod 600 "$WSL_SSH_KEY"
 
 # Cập nhật biến SSH_KEY trỏ sang bản copy trên Linux filesystem
 SSH_KEY="$WSL_SSH_KEY"
+upsert_env "SSH_KEY_PATH" "$SSH_KEY"
 echo -e "${GREEN}✅ SSH key đã được sao chép sang Linux filesystem và bảo mật tại: $SSH_KEY${NC}"
 
 # 5. Dùng AWS CLI tự động lấy IP hiện tại
 echo -e "${YELLOW}🔍 Đang lấy 2 IP mới nhất từ AWS của cụm Swarm...${NC}"
 
+
+ MANAGER_IP=$(aws ec2 describe-instances \
+      --filters "Name=tag:Role,Values=manager" "Name=instance-state-name,Values=running" \
+      --query "Reservations[*].Instances[*].PublicIpAddress" --output text | head -n 1)
 # Tìm máy Manager (dựa vào tags)
-MANAGER_IP=$(aws ec2 describe-instances \
-    --filters "Name=tag:Role,Values=manager" "Name=instance-state-name,Values=running" \
-    --query "Reservations[*].Instances[*].PublicIpAddress" --output text | head -n 1)
+ WORKER_IPS=$(aws ec2 describe-instances \
+      --filters "Name=tag:Role,Values=worker" "Name=instance-state-name,Values=running" \
+      --query "Reservations[*].Instances[*].PublicIpAddress" --output text | tr '\t' '\n' | awk 'NF' | sort -u)
 
-# Tìm máy Worker (dựa vào tags)
-WORKER_IP=$(aws ec2 describe-instances \
-    --filters "Name=tag:Role,Values=worker" "Name=instance-state-name,Values=running" \
-    --query "Reservations[*].Instances[*].PublicIpAddress" --output text)
+  WORKER_IP_PRIMARY=$(echo "$WORKER_IPS" | head -n 1)
 
-if [ -z "$MANAGER_IP" ] || [ -z "$WORKER_IP" ]; then
-    echo -e "${RED}❌ Không tìm thấy IP! Quên chưa chạy \`terraform apply\` hoặc EC2 chưa bật (Running) rồi.${NC}"
-    exit 1
-fi
+  if [ -z "$MANAGER_IP" ] || [ -z "$WORKER_IP_PRIMARY" ]; then
+      echo -e "${RED}❌ Không tìm thấy IP manager/worker.${NC}"
+      exit 1
+  fi
 
-echo -e "   📍 ${GREEN}Manager IP: $MANAGER_IP${NC}"
-echo -e "   📍 ${GREEN}Worker IP: $WORKER_IP${NC}"
+  upsert_env "MANAGER_IP" "$MANAGER_IP"
+  upsert_env "WORKER_IP_PRIMARY" "$WORKER_IP_PRIMARY"
+  upsert_env "WORKER_IPS" "$(echo "$WORKER_IPS" | paste -sd ',' -)"
 
 # 6. Ghi đè thông tin IP mới vào Ansible hosts.ini
 mkdir -p "$(dirname "$HOSTS_FILE")"
@@ -237,13 +239,36 @@ cat > "$HOSTS_FILE" <<EOF
 manager1 ansible_host=$MANAGER_IP ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY
 
 [workers]
-worker1 ansible_host=$WORKER_IP ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY
+EOF
+
+# Ghi danh sách worker (hỗ trợ nhiều worker nếu có)
+i=1
+for ip in $WORKER_IPS; do
+    echo "worker$i ansible_host=$ip ansible_user=ubuntu ansible_ssh_private_key_file=$SSH_KEY" >> "$HOSTS_FILE"
+    i=$((i+1))
+done
+
+cat >> "$HOSTS_FILE" <<EOF
 
 [swarm:children]
 manager
 workers
 EOF
 echo -e "${GREEN}✅ Đã cập nhật xong file host cho Ansible ($HOSTS_FILE).${NC}"
+ if [ -z "${DOCKERHUB_USERNAME:-}" ] || [ -z "${DOCKERHUB_TOKEN:-}" ]; then
+      echo -e "${YELLOW}⚠️ Thiếu DOCKERHUB_USERNAME/DOCKERHUB_TOKEN trong .env.${NC}"
+      read -p "Nhập Docker Hub Username: " input_docker_user_force
+      read -sp "Nhập Docker Hub Token: " input_docker_token_force
+      echo ""
+      if [ -z "$input_docker_user_force" ] || [ -z "$input_docker_token_force" ]; then
+          echo -e "${RED}❌ Không thể tiếp tục CI/CD nếu thiếu DockerHub credentials.${NC}"
+          exit 1
+      fi
+      upsert_env "DOCKERHUB_USERNAME" "$input_docker_user_force"
+      upsert_env "DOCKERHUB_TOKEN" "$input_docker_token_force"
+      export DOCKERHUB_USERNAME="$input_docker_user_force"
+      export DOCKERHUB_TOKEN="$input_docker_token_force"
+  fi
 
 # --- GITHUB CLI: CÀI ĐẶT & SETUP SECRETS ---
 
@@ -272,7 +297,7 @@ if command -v gh &> /dev/null; then
         gh secret set SSH_HOST --body "$MANAGER_IP"
         gh secret set SSH_PRIVATE_KEY < "$SSH_KEY"
         gh secret set SSH_USER --body "ubuntu"
-        gh secret set SWARM_SERVICE_NAME --body "app_service" # Đổi tên này thành tên docker swarm service name tương ứng của bạn
+        gh secret set SWARM_SERVICE_NAME --body "app_app" # Đổi tên này thành tên docker swarm service name tương ứng của bạn
 
         # Setup thêm DOCKERHUB secrets nếu người dùng nhập trong .env
         if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
@@ -292,13 +317,18 @@ fi
 # --- PHASE 4.5: RESET DOCKER SWARM ---
 
 # 7. Xử lý "Swarm treo" do đổi IP
-echo -e "${YELLOW}🧹 Đang force-leave (Reset) Swarm cũ trên Manager & Worker...${NC}"
+echo -e "${YELLOW}🧹 Đang force-leave (Reset) Swarm cũ trên Manager & Workers...${NC}"
 # Sử dụng StrictHostKeyChecking=no để tránh lỗi xác nhận fingerprint khi IP đổi
-ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$WORKER_IP "sudo docker swarm leave --force" 2>/dev/null || true
-ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP "sudo docker swarm leave --force" 2>/dev/null || true
+for ip in $WORKER_IPS; do
+    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i "$SSH_KEY" ubuntu@$ip "sudo docker swarm leave --force" 2>/dev/null || true
+done
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -i "$SSH_KEY" ubuntu@$MANAGER_IP "sudo docker swarm leave --force" 2>/dev/null || true
+
 echo -e "${GREEN}✅ Đã dọn dẹp Swarm state.${NC}"
 ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$MANAGER_IP" 2>/dev/null || true
-ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$WORKER_IP" 2>/dev/null || true
+for ip in $WORKER_IPS; do
+    ssh-keygen -f "$HOME/.ssh/known_hosts" -R "$ip" 2>/dev/null || true
+done
 
 
 # --- PHASE 4.6: ANSIBLE — Cấu hình Server & Docker Swarm ---
@@ -310,7 +340,8 @@ echo -e "${YELLOW}⚙️ Đang chạy Ansible cấu hình hệ thống với dom
 cd "$ANSIBLE_DIR"
 
 # Thực thi Playbook
-ansible-playbook -i inventory/hosts.ini \
+ansible-playbook -i "$HOSTS_FILE" \
+    --private-key "$SSH_KEY" \
     playbooks/01-bootstrap.yml \
     playbooks/02-swarm.yml \
     playbooks/03-traefik-letsencrypt.yml \
@@ -322,36 +353,46 @@ echo -e "${GREEN}✅ Cấu hình Ansible hoàn tất.${NC}"
 # Quay lại thư mục gốc để chuẩn bị cho bước tiếp theo
 cd "$PROJECT_ROOT"
 
-# --- KẾT QUẢ VÀ GIT PUSH ---
+# --- PHASE 4.7: APP DEPLOYMENT ---
+echo -e "${YELLOW}🚀 Phase 4.7: Đang chuẩn bị và triển khai Stack Application...${NC}"
 
-# 9. In kết quả cuối cùng
-clear
-
-# Nếu biến GIT_BRANCH không được set, mặc định là 'main'
-TARGET_BRANCH=${GIT_BRANCH:-main}
-
-echo -e "${GREEN}🎉 HOÀN TẤT TỰ ĐỘNG HÓA!${NC}"
-echo -e "👉 ${YELLOW}$WORKER_IP${NC}"
-echo -e "👉 ${YELLOW}$MANAGER_IP${NC}"
-echo -e ""
-
-while true; do
-    echo -en "${YELLOW}Đã cập nhật SSH_HOST xong chưa? Có muốn script tự động Git Push không? (y/n): ${NC}"
-    read yn
-    case $yn in
-        [Yy]* ) 
-            echo -e "\n${GREEN}🚀 Đang thực hiện push code lên nhánh $TARGET_BRANCH...${NC}"
-            cd "$PROJECT_ROOT"
-            git push origin "$TARGET_BRANCH"
-            echo -e "${GREEN}✅ Đã push thành công! Hãy mở tab Actions trên GitHub để xem tiến trình chạy CI/CD.${NC}"
-            break;;
-        [Nn]* ) 
-            echo -e "\n${YELLOW}Ghi nhận! Khi nào thiết lập GitHub xong, bạn hãy tự trỏ ra thư mục gốc và gõ lệnh:${NC}"
-            echo -e "👉 ${GREEN}git push origin $TARGET_BRANCH${NC}"
-            break;;
-        * ) echo -e "${RED}Vui lòng chọn y hoặc n.${NC}";;
-    esac
+# 1. Chờ Traefik sẵn sàng (Network traefik-public phải tồn tại)
+echo -e "${YELLOW}⏳ Đang chờ Traefik network sẵn sàng...${NC}"
+until ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP "docker network ls | grep -q traefik-public" ; do
+  echo -n "."
+  sleep 2
 done
+echo -e "${GREEN} OK!${NC}"
+
+# 1.5 Đảm bảo network monitoring tồn tại trước khi deploy app
+# Tránh lỗi external network "monitoring" chưa có ở lần chạy đầu.
+echo -e "${YELLOW}🕸️ Đảm bảo network monitoring tồn tại...${NC}"
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
+"docker network inspect monitoring >/dev/null 2>&1 || docker network create --driver overlay --attachable monitoring"
+echo -e "${GREEN}✅ monitoring network đã sẵn sàng.${NC}"
+
+# 2. Copy file stack lên Manager
+echo -e "${YELLOW}📤 Đang copy swarm-stack.yml lên Manager...${NC}"
+scp -o StrictHostKeyChecking=no -i "$SSH_KEY" "$PROJECT_ROOT/swarm-stack.yml" ubuntu@$MANAGER_IP:/home/ubuntu/swarm-stack.yml
+
+# 3. Deploy App Stack TỪ XA qua SSH
+echo -e "${YELLOW}🚀 Đang thực thi docker stack deploy trên Manager...${NC}"
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
+"DOMAIN_NAME=$DOMAIN_NAME \
+DOCKER_IMAGE=${DOCKER_IMAGE:-giang/final-tier4-app} \
+APP_VERSION=${APP_VERSION:-v1.0.1} \
+docker stack deploy -c /home/ubuntu/swarm-stack.yml app --with-registry-auth"
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Triển khai Application thành công.${NC}"
+    echo -e "${YELLOW}⏳ Đang chờ App hội tụ...${NC}"
+    sleep 15
+else
+    echo -e "${RED}❌ Lỗi khi triển khai Application.${NC}"
+    exit 1
+fi
+
+# --- DỌN DẸP CONFIG RÁC VÀ GIT PUSH ---
 echo -e "=========================================================="
 
 # --- PHASE 5: MONITORING DEPLOYMENT ---
@@ -363,18 +404,28 @@ echo -e "${YELLOW}📊 Đang cấu hình hệ thống giám sát cho Domain: ${D
 GF_USER=${GF_SECURITY_ADMIN_USER:-admin}
 GF_PASS=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
 
-# 2. Chuyển vào thư mục chứa stack monitoring
-cd "$MONITORING_DIR" || { echo -e "${RED}❌ Không tìm thấy thư mục Monitoring tại: $MONITORING_DIR${NC}"; exit 1; }
+# 2. Copy thư mục monitoring lên Manager
+echo -e "${YELLOW}📤 Đang đồng bộ thư mục monitoring lên Manager...${NC}"
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP "mkdir -p /home/ubuntu/monitoring"
+scp -o StrictHostKeyChecking=no -r -i "$SSH_KEY" "$MONITORING_DIR/"* ubuntu@$MANAGER_IP:/home/ubuntu/monitoring/
 
-# 3. Deploy Stack Monitoring 
-# Lưu ý: Chúng ta truyền DOMAIN_NAME vào để file YAML bốc được
+# 3. Deploy Stack Monitoring TỪ XA
+echo -e "${YELLOW}🚀 Đang thực thi docker stack deploy monitoring trên Manager...${NC}"
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
+"cd /home/ubuntu/monitoring && \
 DOMAIN_NAME=$DOMAIN_NAME \
 CONFIG_VERSION=$CONFIG_VERSION \
 GF_SECURITY_ADMIN_USER=$GF_USER \
 GF_SECURITY_ADMIN_PASSWORD=$GF_PASS \
-docker stack deploy -c docker-stack.monitoring.yml monitoring --with-registry-auth
+docker stack deploy -c docker-stack.monitoring.yml monitoring --with-registry-auth"
 
 if [ $? -eq 0 ]; then
+    echo -e "${YELLOW}⏳ Đang chờ hệ thống Monitoring sẵn sàng (60s)...${NC}"
+    # Chờ các service hội tụ (converge)
+    sleep 30
+    echo -e "${YELLOW}🔍 Kiểm tra trạng thái các service...${NC}"
+    ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP "docker service ls --filter label=com.docker.stack.namespace=monitoring"
+    
     echo -e "${GREEN}✅ Phase 5 hoàn tất!${NC}"
     echo -e "${CYAN}-------------------------------------------------------${NC}"
     echo -e "${WHITE}🔗 Grafana:    https://grafana.${DOMAIN_NAME}${NC}"
@@ -388,7 +439,7 @@ fi
 # Quay lại thư mục gốc
 cd "$PROJECT_ROOT"
 
-# --- PHẦN DỌN DẸP CONFIG RÁC (CLEANUP) ---
+# --- PHẦN DỌN DẸP CONFIG RÁC (CLEANUP) ------
 
 echo -e "${YELLOW}🧹 Đang dọn dẹp các Docker Config cũ không còn sử dụng...${NC}"
 
@@ -407,8 +458,8 @@ ALL_CONFIGS=$(ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
 DELETED=0
 if [ -n "$ALL_CONFIGS" ]; then
     for config_id in $ALL_CONFIGS; do
-        # Chỉ xóa config KHÔNG nằm trong danh sách active
-        if ! echo "$ACTIVE_CONFIG_IDS" | grep -q "$config_id"; then
+        # Chỉ xóa config KHÔNG nằm trong danh sách active (Dùng grep -Fxq để match chính xác nguyên dòng)
+        if ! echo "$ACTIVE_CONFIG_IDS" | grep -Fxq "$config_id"; then
             ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
                 "docker config rm $config_id" > /dev/null 2>&1 && \
             echo -e "${BLUE}  - Đã xóa config cũ: $config_id${NC}"
@@ -422,3 +473,26 @@ if [ "$DELETED" -gt 0 ]; then
 else
     echo -e "${CYAN}ℹ️ Không có config rác nào cần dọn dẹp.${NC}"
 fi
+ # --- KẾT QUẢ & GIT PUSH ---
+  TARGET_BRANCH=${GIT_BRANCH:-main}
+
+  echo -e ""
+  echo -e "${GREEN}🎉 HOÀN TẤT PIPELINE HẠ TẦNG + SWARM + APP + MONITORING${NC}"
+  echo -e "👉 ${YELLOW}Manager: $MANAGER_IP${NC}"
+  echo -e "👉 ${YELLOW}Workers: $(echo "$WORKER_IPS" | tr '\n' ' ')${NC}"
+
+  while true; do
+      echo -en "${YELLOW}Có muốn script tự động git push lên nhánh $TARGET_BRANCH để chạy GitHub Actions không? (y/n): ${NC}"
+      read yn
+      case $yn in
+          [Yy]* )
+              cd "$PROJECT_ROOT"
+              git push origin "$TARGET_BRANCH"
+              echo -e "${GREEN}✅ Đã push. Kiểm tra tab Actions để theo dõi CI/CD.${NC}"
+              break;;
+          [Nn]* )
+              echo -e "${YELLOW}ℹ️ Bỏ qua tự động push. Bạn có thể chạy: git push origin $TARGET_BRANCH${NC}"
+              break;;
+          * ) echo -e "${RED}Vui lòng chọn y hoặc n.${NC}";;
+      esac
+  done

@@ -213,7 +213,7 @@ resource "aws_security_group" "edge" {
 }
 
 resource "aws_instance" "swarm_nodes" {
-  count = local.is_swarm ? 2 : 0
+  count = local.is_swarm ? 3 : 0
 
   ami                         = "ami-0fc5d935ebf8bc3bc" # Ubuntu 22.04 LTS (us-east-1)
   instance_type               = var.instance_type
