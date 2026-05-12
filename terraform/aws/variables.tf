@@ -94,3 +94,14 @@ variable "k8s_max_nodes" {
   type        = number
   default     = 4
 }
+
+variable "allowed_ssh_cidrs" {
+  description = "CIDR blocks allowed to SSH to Swarm nodes."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = length(var.allowed_ssh_cidrs) > 0
+    error_message = "Set allowed_ssh_cidrs to your trusted public IP, for example [\"x.x.x.x/32\"]."
+  }
+}

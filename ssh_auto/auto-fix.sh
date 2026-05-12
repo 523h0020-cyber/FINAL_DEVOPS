@@ -101,7 +101,7 @@ fi
 
 echo -e "${YELLOW}📦 Đang nạp cấu hình từ file .env...${NC}"
 set -a
-  . ./.env
+    . "$ENV_FILE"
 set +a
 
 # Kiểm tra nhanh xem đã nạp được Access Key chưa, nếu chưa có thì cũng gọi Setup
@@ -144,9 +144,20 @@ export CONFIG_VERSION=$(date +%s)
 upsert_env "CONFIG_VERSION" "$CONFIG_VERSION"
 
 export GF_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
-export GF_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
+if [ -z "${GF_SECURITY_ADMIN_PASSWORD:-}" ] || [ "$GF_SECURITY_ADMIN_PASSWORD" = "ChangeMe_123!" ]; then
+    echo -e ""
+    echo -en "${YELLOW}Nhap mat khau Grafana admin (khong de trong): ${NC}"
+    read -rsp "" gf_pass
+    echo ""
+    if [ -z "$gf_pass" ]; then
+        echo -e "${RED}❌ Mat khau Grafana admin khong duoc de trong.${NC}"
+        exit 1
+    fi
+    export GF_SECURITY_ADMIN_PASSWORD="$gf_pass"
+    upsert_env "GF_SECURITY_ADMIN_PASSWORD" "$GF_SECURITY_ADMIN_PASSWORD"
+fi
+export GF_ADMIN_PASSWORD="$GF_SECURITY_ADMIN_PASSWORD"
 upsert_env "GF_SECURITY_ADMIN_USER" "$GF_ADMIN_USER"
-upsert_env "GF_SECURITY_ADMIN_PASSWORD" "$GF_ADMIN_PASSWORD"
 echo -e ""
 echo -en "${YELLOW}Có muốn cập nhật các giá trị GitHub/Docker Hub ngay bây giờ? (y/n): ${NC}"
 read setup_choice
@@ -168,7 +179,8 @@ if [ "$setup_choice" = "y" ] || [ "$setup_choice" = "Y" ]; then
         echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_USERNAME${NC}"
     fi
     
-    read -rp "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: " 
+    read -rsp "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: " input_docker_token
+    echo ""
     
     if [ -n "$input_docker_token" ]; then
         upsert_env "DOCKERHUB_TOKEN" "$input_docker_token"
@@ -453,10 +465,17 @@ echo -e "=========================================================="
 
 echo -e "${YELLOW}📊 Đang cấu hình hệ thống giám sát cho Domain: ${DOMAIN_NAME}${NC}"
 
-# CONFIG_VERSION đã được khai báo ở Phase 1, dùng lại ở đây để đảm bảo nhất quán
-# Lấy Admin User/Pass từ .env hoặc mặc định
+# CONFIG_VERSION da duoc khai bao o Phase 1, dung lai o day de dam bao nhat quan
+# Lay Admin User/Pass tu .env (bat buoc da nhap o buoc truoc)
 GF_USER=${GF_SECURITY_ADMIN_USER:-admin}
-GF_PASS=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
+GF_PASS=${GF_SECURITY_ADMIN_PASSWORD}
+
+# Tao Docker secret cho Grafana admin password (su dung CONFIG_VERSION)
+GRAFANA_SECRET_NAME="grafana_admin_password${CONFIG_VERSION}"
+echo -e "${YELLOW}🔐 Dang tao Docker secret cho Grafana admin password...${NC}"
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
+"docker secret rm $GRAFANA_SECRET_NAME >/dev/null 2>&1 || true; printf '%s' \"$GF_PASS\" | docker secret create $GRAFANA_SECRET_NAME - >/dev/null"
+echo -e "${GREEN}✅ Grafana secret da san sang: $GRAFANA_SECRET_NAME${NC}"
 
 # 2. Copy thư mục monitoring lên Manager
 echo -e "${YELLOW}📤 Đang đồng bộ thư mục monitoring lên Manager...${NC}"
@@ -470,15 +489,27 @@ ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
 DOMAIN_NAME=$DOMAIN_NAME \
 CONFIG_VERSION=$CONFIG_VERSION \
 GF_SECURITY_ADMIN_USER=$GF_USER \
-GF_SECURITY_ADMIN_PASSWORD=$GF_PASS \
 docker stack deploy -c docker-stack.monitoring.yml monitoring --with-registry-auth"
 
 if [ $? -eq 0 ]; then
-    echo -e "${YELLOW}⏳ Đang chờ hệ thống Monitoring sẵn sàng (60s)...${NC}"
-    # Chờ các service hội tụ (converge)
-    sleep 30
-    echo -e "${YELLOW}🔍 Kiểm tra trạng thái các service...${NC}"
-    ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP "docker service ls --filter label=com.docker.stack.namespace=monitoring"
+    echo -e "${YELLOW}⏳ Dang cho monitoring converge...${NC}"
+    ready=0
+    for i in {1..12}; do
+        status=$(ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
+          "docker service ls --filter label=com.docker.stack.namespace=monitoring --format '{{.Name}} {{.Replicas}}'")
+        if echo "$status" | grep -q "monitoring_grafana 1/1" && echo "$status" | grep -q "monitoring_prometheus 1/1"; then
+            ready=1
+            break
+        fi
+        echo -n "."
+        sleep 10
+    done
+    echo ""
+    if [ "$ready" -ne 1 ]; then
+        echo -e "${RED}❌ Monitoring chua converge. Hay kiem tra docker service ls.${NC}"
+        ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP "docker service ls --filter label=com.docker.stack.namespace=monitoring"
+        exit 1
+    fi
     
     echo -e "${GREEN}✅ Phase 5 hoàn tất!${NC}"
     echo -e "${CYAN}-------------------------------------------------------${NC}"

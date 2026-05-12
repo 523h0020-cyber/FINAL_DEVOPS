@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile - Optimized image build
+﻿# Multi-stage Dockerfile - Optimized image build
 # Stage 1: Build stage
 FROM node:20-alpine AS builder
 
@@ -18,10 +18,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dumb-init and upgrade OS packages to patch vulnerabilities (e.g. tar CVE-2026-31802)
+# Install dumb-init and upgrade OS packages to patch vulnerabilities
 RUN apk upgrade --no-cache && \
-    apk add --no-cache dumb-init && \
-    npm install -g npm@latest
+  apk add --no-cache dumb-init
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs
@@ -42,10 +41,11 @@ EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
 # Use dumb-init to run Node.js properly
 ENTRYPOINT ["dumb-init", "--"]
 
 # Start application
 CMD ["node", "main.js"]
+

@@ -176,9 +176,13 @@ jobs:
           echo "deploy_image=${DOCKER_IMAGE}:${{ steps.prep_tags.outputs.semver_tag }}" >> "$GITHUB_OUTPUT"
 
   cd:
+    name: Deploy to production
     runs-on: ubuntu-latest
     needs: build_and_push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://${{ secrets.DOMAIN_NAME }}
 
     steps:
       - name: Deploy to Docker Swarm via SSH
@@ -217,3 +221,4 @@ jobs:
           kubectl -n "${{ secrets.K8S_NAMESPACE }}" set image deployment/"${{ secrets.K8S_DEPLOYMENT_NAME }}" \
             "${{ secrets.K8S_CONTAINER_NAME }}=${{ needs.build_and_push.outputs.deploy_image }}"
           kubectl -n "${{ secrets.K8S_NAMESPACE }}" rollout status deployment/"${{ secrets.K8S_DEPLOYMENT_NAME }}" --timeout=180s
+

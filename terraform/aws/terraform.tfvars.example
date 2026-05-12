@@ -6,8 +6,11 @@ public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
 private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24"]
 
 # Used in swarm mode
-instance_type = "t2.micro"
-ssh_key_name  = "your-keypair-name"
+instance_type = "t3.small"
+ssh_key_name  = "final-devops-key"
+auto_generate_keypair = true
+keypair_output_path   = "./final-devops-key.pem"
+allowed_ssh_cidrs     = ["YOUR_PUBLIC_IP/32"]
 
 # Used in kubernetes mode
 k8s_version             = "1.29"
