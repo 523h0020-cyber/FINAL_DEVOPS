@@ -62,7 +62,7 @@ variable "keypair_output_path" {
   type        = string
   # ./final-devops-key.pem = terraform/aws/final-devops-key.pem
   # Khớp với SSH_KEY="$TERRAFORM_DIR/final-devops-key.pem" trong auto-fix.sh
-  default     = "./final-devops-key.pem"
+  default = "./final-devops-key.pem"
 }
 
 variable "k8s_version" {

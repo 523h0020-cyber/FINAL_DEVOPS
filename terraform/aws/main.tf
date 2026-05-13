@@ -1,11 +1,11 @@
-﻿provider "aws" {
+provider "aws" {
   region = var.region
 }
 
 locals {
-  is_swarm   = var.deployment_mode == "swarm"
-  is_k8s     = var.deployment_mode == "kubernetes"
-  web_ports  = [80, 443]
+  is_swarm  = var.deployment_mode == "swarm"
+  is_k8s    = var.deployment_mode == "kubernetes"
+  web_ports = [80, 443]
 
   tags = {
     Project   = var.project_name
@@ -23,9 +23,9 @@ resource "tls_private_key" "generated" {
 }
 
 resource "aws_key_pair" "generated" {
-  count           = var.auto_generate_keypair ? 1 : 0
-  key_name        = var.ssh_key_name
-  public_key      = tls_private_key.generated[0].public_key_openssh
+  count      = var.auto_generate_keypair ? 1 : 0
+  key_name   = var.ssh_key_name
+  public_key = tls_private_key.generated[0].public_key_openssh
 
   tags = merge(local.tags, {
     Name = "${var.project_name}-keypair"
@@ -176,35 +176,35 @@ resource "aws_security_group" "edge" {
 
   # Docker Swarm internal communication (self-referencing)
   ingress {
-    description     = "Swarm cluster management"
-    from_port       = 2377
-    to_port         = 2377
-    protocol        = "tcp"
-    self            = true
+    description = "Swarm cluster management"
+    from_port   = 2377
+    to_port     = 2377
+    protocol    = "tcp"
+    self        = true
   }
 
   ingress {
-    description     = "Swarm node discovery (TCP)"
-    from_port       = 7946
-    to_port         = 7946
-    protocol        = "tcp"
-    self            = true
+    description = "Swarm node discovery (TCP)"
+    from_port   = 7946
+    to_port     = 7946
+    protocol    = "tcp"
+    self        = true
   }
 
   ingress {
-    description     = "Swarm node discovery (UDP)"
-    from_port       = 7946
-    to_port         = 7946
-    protocol        = "udp"
-    self            = true
+    description = "Swarm node discovery (UDP)"
+    from_port   = 7946
+    to_port     = 7946
+    protocol    = "udp"
+    self        = true
   }
 
   ingress {
-    description     = "VXLAN overlay network"
-    from_port       = 4789
-    to_port         = 4789
-    protocol        = "udp"
-    self            = true
+    description = "VXLAN overlay network"
+    from_port   = 4789
+    to_port     = 4789
+    protocol    = "udp"
+    self        = true
   }
 
   egress {
@@ -242,7 +242,7 @@ resource "aws_instance" "swarm_nodes" {
 
   # Äáº£m báº£o Key Pair Ä‘Ã£ Ä‘Æ°á»£c upload lÃªn AWS trÆ°á»›c khi táº¡o EC2
   # TrÃ¡nh lá»—i InvalidKeyPair.NotFound khi auto_generate_keypair = true
-  depends_on = var.auto_generate_keypair ? [aws_key_pair.generated] : []
+  depends_on = [aws_key_pair.generated]
 
   tags = merge(local.tags, {
     Name = "${var.project_name}-swarm-${count.index + 1}"
