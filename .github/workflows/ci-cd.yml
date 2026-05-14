@@ -182,7 +182,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
       name: production
-      url: https://${{ secrets.DOMAIN_NAME }}
+      url: https://523h0020.site
 
     steps:
       - name: Configure AWS credentials
