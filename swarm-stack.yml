@@ -16,7 +16,7 @@ services:
     networks:
       - traefik-public
       - backend
-      - monitoring  # FIX: ThÃªm vÃ o network monitoring Ä‘á»ƒ Prometheus scrape Ä‘Æ°á»£c metrics
+      - monitoring  # FIX: Them vao network monitoring de Prometheus scrape duoc metrics
     deploy:
       replicas: 3
       resources:
@@ -42,10 +42,10 @@ services:
         window: 120s
       labels:
         - "traefik.enable=true"
-        # FIX: DÃ¹ng biáº¿n ${DOMAIN_NAME} thay vÃ¬ hardcode domain
+        # FIX: Dung bien ${DOMAIN_NAME} thay vi hardcode domain
         - "traefik.http.routers.app.rule=Host(`${DOMAIN_NAME}`)"
         - "traefik.http.routers.app.entrypoints=websecure"
-        # FIX: Äá»“ng bá»™ certresolver vá»›i Traefik config (dÃ¹ng 'le' thay vÃ¬ 'myresolver')
+        # FIX: Dong bo certresolver voi Traefik config
         - "traefik.http.routers.app.tls.certresolver=le"
         - "traefik.http.services.app.loadbalancer.server.port=3000"
 
@@ -72,8 +72,7 @@ networks:
   backend:
     driver: overlay
   monitoring:
-    external: true  # DÃ¹ng network overlay Ä‘Ã£ táº¡o bá»Ÿi monitoring stack
+    external: true
 
 volumes:
   mongo-data:
-

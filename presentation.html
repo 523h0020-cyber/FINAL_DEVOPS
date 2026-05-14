@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DevOps Final Defense - Tier 4 Docker Swarm</title>
+
+    <!-- Reveal.js CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reset.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/theme/black.min.css">
+
+    <!-- Highlight.js Theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/monokai.min.css">
+
+    <!-- Mermaid CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+
+    <style>
+        /* Sửa lỗi tràn viền và lệch phông */
+        .reveal {
+            font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        }
+        .reveal pre {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            font-size: 0.45em !important; /* Thu nhỏ code block chống tràn */
+            margin: 0 auto;
+            width: 100%;
+            max-height: 480px; 
+            overflow-y: auto; /* Thêm thanh cuộn khi code quá dài */
+        }
+        .reveal pre code {
+            max-height: 480px; 
+        }
+        .reveal h2 {
+            color: #4CAF50;
+            font-size: 1.5em; /* Chuẩn hóa tỷ lệ Header */
+        }
+        .reveal h3 {
+            font-size: 1.1em;
+            color: #ccc;
+        }
+        .reveal .text-left {
+            text-align: left;
+        }
+        .reveal .highlight-text {
+            color: #03A9F4;
+        }
+        .reveal ul {
+            font-size: 0.7em;
+            margin-bottom: 20px;
+        }
+        /* Custom UI Elements */
+        .flex-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch; /* Đảm bảo 2 cột bằng nhau */
+            gap: 25px;
+            width: 100%;
+            margin-top: 15px;
+        }
+        .col {
+            flex: 1;
+            text-align: left;
+            min-width: 0; /* Ép wrap text trong grid */
+        }
+        .box {
+            border: 2px solid #4CAF50;
+            padding: 20px;
+            border-radius: 8px;
+            background: rgba(76, 175, 80, 0.1);
+            font-size: 0.65em;
+            box-sizing: border-box;
+            height: 100%; /* Cân bằng khối box */
+        }
+        .box-title {
+            color: #FFC107;
+            font-weight: bold;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #4CAF50;
+            padding-bottom: 8px;
+            font-size: 1.1em;
+        }
+        .table-custom {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.6em;
+            margin-top: 20px;
+        }
+        .table-custom th, .table-custom td {
+            border: 1px solid #555;
+            padding: 12px;
+            text-align: left; /* Căn trái rỗng rãi hơn */
+        }
+        .table-custom th {
+            background: #333;
+            color: #4CAF50;
+            text-align: center;
+        }
+        .mermaid {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            font-size: 0.7em; /* Tránh sơ đồ vượt cỡ */
+        }
+        .code-caption {
+            font-size: 0.45em;
+            color: #ff9800;
+            text-align: right;
+            margin-top: -15px;
+            font-style: italic;
+        }
+        /* Custom scrollbar for better look */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1); 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4CAF50; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #45a049; 
+        }
+    </style>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+    </script>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+
+            <!-- Slide 1: Title -->
+            <section>
+                <h2>BẢO VỆ ĐỒ ÁN DEVOPS</h2>
+                <h3 class="highlight-text">Hệ thống CI/CD Automation - Tier 4 Docker Swarm</h3>
+                <p>Instructor: DevOps Architect</p>
+                <br>
+                <div style="font-size: 0.7em;">
+                    <p>Trình bày bởi: <strong>[Tên của bạn]</strong></p>
+                    <p>Mã đồ án: <em>Startup Automation X</em></p>
+                </div>
+            </section>
+
+            <!-- Slide 2: Giới thiệu chung -->
+            <section>
+                <h2>1. Bối cảnh & Bài toán</h2>
+                <div class="flex-container">
+                    <div class="col box" style="border-color: #f44336; background: rgba(244, 67, 54, 0.1);">
+                        <div class="box-title">🧨 Vấn đề của mô hình cũ</div>
+                        <ul>
+                            <li>Triển khai hoàn toàn thủ công, tốn nhân lực.</li>
+                            <li>Xung đột môi trường: "Chạy được ở local nhưng sập trên server Prod".</li>
+                            <li>Tình trạng Single-Point-of-Failure (SPOF) - Server chết là hệ thống sập toàn bộ.</li>
+                            <li>Không thể theo dõi bộ nhớ/CPU do thiếu Monitoring.</li>
+                        </ul>
+                    </div>
+                    <div class="col box" style="border-color: #03A9F4; background: rgba(3, 169, 244, 0.1);">
+                        <div class="box-title">🚀 Triết lý DevOps & Mục tiêu</div>
+                        <ul>
+                            <li><strong>Infrastructure as Code (IaC):</strong> Mã hóa kiến trúc hạ tầng (Terraform, Ansible).</li>
+                            <li><strong>Shift-Left Security:</strong> Tích hợp quét lỗ hổng vào luồng CI (Trivy).</li>
+                            <li><strong>High Availability:</strong> Triển khai cụm Docker Swarm phân tán đồng bộ.</li>
+                            <li><strong>Full Observability:</strong> Giám sát log và chỉ số bằng Prometheus & Grafana.</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Slide 3: Kiến trúc Hệ thống -->
+            <section>
+                <h2>2. Kiến trúc Hệ thống Phân tầng (Tier 4)</h2>
+                <div class="flex-container">
+                    <div class="col" style="flex: 1.5;">
+                        <div class="mermaid">
+                            graph LR
+                                Client((Client HTTP/S)) -->|DNS/EIP| Traefik[Traefik Proxy Tier 1]
+                                Traefik -.->|Automated cert| Let(Let's Encrypt)
+                                subgraph Swarm Overlay Network
+                                Traefik -->|LB| NodeApp1[App 1 Tier 2]
+                                Traefik -->|LB| NodeApp2[App 2 Tier 2]
+                                end
+                                NodeApp1 <--> Mongo[(MongoDB Tier 3)]
+                                NodeApp2 <--> Mongo
+                                Prom[Prometheus Tier 4] -.->|Scrape| Swarm[Swarm Metrics]
+                        </div>
+                    </div>
+                    <div class="col box" style="border-color: transparent; background: transparent; padding: 0;">
+                        <div class="box" style="margin-bottom: 10px;">
+                            <div class="box-title">Nguyên tắc Phân tầng</div>
+                            <ul>
+                                <li><strong>Tier 1: Proxy/Edge.</strong> Đảm nhiệm SSL (Let's Encrypt) và Ingress Routing bởi Traefik.</li>
+                                <li><strong>Tier 2: Business Logic.</strong> Stateless Node.js APIs (Auto Scale-out).</li>
+                                <li><strong>Tier 3: Database.</strong> MongoDB lưu giữ cơ sở dữ liệu.</li>
+                                <li><strong>Tier 4: Observability.</strong> Dashboard giám sát Prometheus + Grafana đứng ngoài luồng dữ liệu chính.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Slide 4: Roadmap Overview -->
+            <section>
+                <h2>Roadmap Triển Khai Thực Tế</h2>
+                <table class="table-custom">
+                    <thead>
+                        <tr>
+                            <th width="20%">Phase</th>
+                            <th width="25%">Công nghệ Cốt lõi</th>
+                            <th>Nhiệm vụ & Chức năng</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>1. Provisioning</strong></td>
+                            <td><span class="highlight-text">Terraform (AWS)</span></td>
+                            <td>Cấp phát Tài nguyên Đám mây tự động. Quản lý hệ thống AWS VPC, EC2, và quy tắc Security Groups.</td>
+                        </tr>
+                        <tr>
+                            <td><strong>2. Configuration</strong></td>
+                            <td><span class="highlight-text">Ansible</span></td>
+                            <td>Bootstrapping cấu hình OS, cài đặt Docker. Script tự động thiết lập cụm Swarm.</td>
+                        </tr>
+                        <tr>
+                            <td><strong>3. Deployment</strong></td>
+                            <td><span class="highlight-text">Docker Swarm</span></td>
+                            <td>Tổ chức cụm (1 Manager, 2 Workers). Quản lý Stack Deployment tập trung cho các Services.</td>
+                        </tr>
+                        <tr>
+                            <td><strong>4. CI/CD DevSecOps</strong></td>
+                            <td><span class="highlight-text">GitHub Actions + Trivy</span></td>
+                            <td>Quét lỗ hổng Image (Security). Xây dựng luồng CI/CD tự động cập nhật qua SSH vào cụm Swarm.</td>
+                        </tr>
+                        <tr>
+                            <td><strong>5. Monitoring</strong></td>
+                            <td><span class="highlight-text">Prometheus + Grafana</span></td>
+                            <td>Thu thập số liệu Node Exporter/cAdvisor và hiển thị biểu đồ cảnh báo tại Dashboard.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Slide 5: Infrastructure as Code -->
+            <section>
+                <section>
+                    <h2>3. Infrastructure as Code (Terraform)</h2>
+                    <div class="flex-container">
+                        <div class="col box text-left">
+                            <div class="box-title">Đảm bảo Idempotency</div>
+                            <ul>
+                                <li><strong>Tính đồng nhất:</strong> Với tệp <code>.tfstate</code>, Terraform chỉ sửa khoảng trống so với file mô tả, chạy bao lần vẫn duy trì 1 trạng thái.</li>
+                                <li><strong>Cố định Entrypoint:</strong> Tránh IP loạn nhịp sau mỗi lần Start/Stop, ta sử dụng <code>aws_eip</code> (Elastic IP) ghim cứng lối vào Swarm Manager.</li>
+                            </ul>
+                        </div>
+                        <div class="col">
+                            <pre><code class="language-hcl" data-trim>
+# terraform/aws/main.tf
+# Chốt IP Tĩnh (Elastic IP) cho Swarm Manager
+resource "aws_eip" "manager_eip" {
+  instance = aws_instance.manager.id
+  domain   = "vpc"
+
+  tags = {
+    Name = "swarm-manager-eip"
+    Role = "Manager"
+  }
+}
+                            </code></pre>
+                            <div class="code-caption">Cấu hình cố định Cổng kết nối Public</div>
+                        </div>
+                    </div>
+                </section>
+                <section>
+                    <h3>Zero-Trust Topology (Security Groups)</h3>
+                    <div class="flex-container">
+                        <div class="col text-left">
+                            <p style="font-size: 0.7em">Theo nguyên lý phân quyền tinh gọn, ta đóng mọi Port thừa. Swarm chỉ bóc tách luồng giao tiếp nội bộ thông qua port riêng của Manager và Worker.</p>
+                            <div class="mermaid">
+                                flowchart TD
+                                    A(Client) -->|TCP 80/443| B[Manager SG Traefik]
+                                    B -->|TCP 2377 Cluster| C[Worker SGs]
+                                    B -.->|Drop chặn đứng| D(TCP 27017 Public) 
+                            </div>
+                        </div>
+                        <div class="col">
+                            <pre><code class="language-hcl" data-trim>
+# terraform/aws/main.tf
+resource "aws_security_group" "swarm_sg" {
+  name        = "swarm-security-group"
+  
+  # Nội bộ VPC: Quản trị cluster Swarm Node
+  ingress {
+    from_port   = 2377
+    to_port     = 2377
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  # Public: Mở đường Traefik cho HTTP/HTTPS
+  ingress {
+    from_port   = 443 
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+                            </code></pre>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- Slide 6: Configuration Management -->
+            <section>
+                <section>
+                    <h2>4. Cấu hình Cụm (Ansible)</h2>
+                    <div class="flex-container">
+                        <div class="col box">
+                            <div class="box-title">Kiến trúc Agentless Deployment</div>
+                            Sức mạnh của Ansible nằm ở việc không cần cài đặt thêm app ẩn nào trên EC2, tất cả qua SSH.
+                            <br><br>
+                            <ol>
+                                <li><strong>Pre-task:</strong> Chuẩn hóa môi trường, gói cơ bản.</li>
+                                <li><strong>Docker-engine:</strong> Thêm Repo và tải tự động.</li>
+                                <li><strong>Swarm-Init:</strong> Tạo Token kết nối Nodes.</li>
+                            </ol>
+                        </div>
+                        <div class="col">
+                            <p style="font-size: 0.7em; font-weight: bold; margin-bottom: 5px;">Inventory Động</p>
+                            <pre><code class="language-ini" data-trim>
+[manager]
+3.90.131.106 ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/aws/base.pem
+
+[workers]
+3.85.12.34 ansible_user=ubuntu
+54.12.45.67 ansible_user=ubuntu
+                            </code></pre>
+                            <p style="font-size: 0.5em; text-align: left; margin-top: 5px;">*Được sinh tự động từ script sau Terraform.</p>
+                        </div>
+                    </div>
+                </section>
+                <section>
+                    <h3>Sự Tinh Gọn Kỹ Thuật (Idempotent Run)</h3>
+                    <div class="flex-container">
+                        <div class="col text-left">
+                            <p style="font-size:0.7em;">Lệnh Swarm Init sẽ văng lỗi Crash (Exit Code 1) nếu node đã bật. Ta thiết lập cờ kiểm tra <code>LocalNodeState</code> để bộ cài Ansible trở nên hoàn hảo không lỗi vặt.</p>
+                        </div>
+                        <div class="col">
+                            <pre><code class="language-yaml" data-trim>
+# playbooks/02-swarm.yml
+- name: Kiểm tra trạng thái Swarm Node
+  command: docker info --format '{{{{ .Swarm.LocalNodeState }}}}'
+  register: swarm_status
+  changed_when: false
+
+- name: Ra lệnh khởi tạo Manager (Nếu chưa)
+  command: docker swarm init --advertise-addr {{{{ ansible_host }}}}
+  when: swarm_status.stdout != 'active'
+                            </code></pre>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- Slide 7: DevSecOps CI/CD -->
+            <section>
+                <section>
+                    <h2>5. DevSecOps Pipeline Tự Động Hóa</h2>
+                    <div class="mermaid">
+                        flowchart LR
+                            Push(Git Push) --> Lint(Check Syntax)
+                            Lint --> Trivy{Trivy Scanner}
+                            Trivy -->|Lỗ hổng High| Break((Pipeline Error))
+                            Trivy -->|Pass| Build(Docker Build/Push)
+                            Build --> SSHDeploy[SSH Remote]
+                            SSHDeploy --> SwarmUp[Docker Stack Deploy]
+                            
+                            style Break fill:#f44336,stroke:#fff,stroke-width:2px;
+                            style Trivy fill:#ff9800;
+                    </div>
+                </section>
+                <section>
+                    <h3>Quy trình Quét Lỗ Hổng Nhúng Gọn (Shift-Left)</h3>
+                    <div class="flex-container">
+                        <div class="col text-left">
+                            <p style="font-size: 0.7em">Bước phòng thủ Trivy ngăn chặn luồng CI lại ngay nếu Base image hoặc NPM modules dính lỗ hổng hệ trọng.</p>
+                            <p style="font-size: 0.7em">Tham số <code>exit-code: 1</code> giúp đóng cổng hoàn toàn rủi ro trước khi ra Prod.</p>
+                        </div>
+                        <div class="col">
+                            <pre><code class="language-yaml" data-trim>
+# .github/workflows/ci.yml
+- name: Run Trivy Scanner
+  uses: aquasecurity/trivy-action@master
+  with:
+    image-ref: '${{{{ secrets.DOCKER_USER }}}}/app'
+    format: 'table'
+    exit-code: '1' # LÊN PROD PHẢI SẠCH LỖI
+    ignore-unfixed: true
+    vuln-type: 'os,library'
+    severity: 'CRITICAL,HIGH'
+                            </code></pre>
+                        </div>
+                    </div>
+                </section>
+                <section>
+                    <h3>Luồng CD - Continuous Deployment</h3>
+                    <div class="flex-container">
+                        <div class="col text-left">
+                            <p style="font-size: 0.7em">Cập nhật ứng dụng tự động bằng Key SSH từ Github sang Swarm Manager.</p>
+                            <p style="font-size: 0.7em">Swarm duy trì <code>stack deploy</code> giúp dàn trải Container đều qua Worker một cách mượt mà, Zero-downtime.</p>
+                        </div>
+                        <div class="col">
+                            <pre><code class="language-yaml" data-trim>
+- name: SSH Deploy to Swarm
+  uses: appleboy/ssh-action@master
+  with:
+    host: ${{{{ secrets.DEPLOY_HOST }}}}
+    username: ubuntu
+    key: ${{{{ secrets.SSH_PRIVATE_KEY }}}}
+    script: |
+      docker pull ${{{{ secrets.DOCKER_USER }}}}/app:main
+      docker stack deploy -c /home/ubuntu/swarm-stack.yml tier4
+                            </code></pre>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- Slide 8: The Proxy & Observability -->
+            <section>
+                <section>
+                    <h2>6. Traefik Routing & Observability</h2>
+                    <div class="col text-left">
+                        <p style="font-size: 0.7em;">Hai thiết kế cuối cùng định hình khối Tier chuyên nghiệp:</p>
+                        <ul style="font-size: 0.7em;">
+                            <li><strong>Traefik Proxy:</strong> Nhận diện dịch vụ tự động chỉ từ Docker qua Labels, lấy SSL Let's Encrypt ngầm (Automated TLS). Thay thế hoàn toàn rắc rối của Nginx.</li>
+                            <li><strong>Prometheus & Grafana:</strong> Kéo thông số về lưu tại DB Chuỗi thời gian và vẽ tổng quan Metrics tập trung, quản lý sức khỏe System.</li>
+                        </ul>
+                    </div>
+                </section>
+                <section>
+                    <h3>Labels Tự Sinh SSL (Service Discovery)</h3>
+                    <div class="flex-container">
+                        <div class="col box text-left" style="font-size:0.75em;">
+                            Chỉ cần khai báo 4 dòng, Traefik sẽ lập tức bắt tín hiệu App, phát hành domain, ép kết nối qua HTTPS mà không cần cấu hình file rời rạc.
+                        </div>
+                        <div class="col">
+                            <pre><code class="language-yaml" data-trim>
+# Phân đoạn App trong swarm-stack.yml
+deploy:
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.app.rule=Host(`demo.aws-tech.com`)"
+    - "traefik.http.routers.app.entrypoints=websecure"
+    - "traefik.http.routers.app.tls.certresolver=letsencrypt"
+                            </code></pre>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <!-- Slide 9: Demo Time -->
+            <section>
+                <h2>7. Kịch bản Thực Trọng (Live Demo)</h2>
+                <div class="flex-container align-center">
+                    <div class="col box">
+                        <div class="box-title">Giai đoạn 1: Auto-Deploy Flow</div>
+                        <ol>
+                            <li>Bật Dashboard App (Giao diện cũ).</li>
+                            <li>Developer <code>git push</code> thay đổi Navbar hiển thị.</li>
+                            <li>Trivy Scan hiển thị Xanh ngắt.</li>
+                            <li>Pipiline Deploy qua SSH, load F5 Web chuyển mới hoàn toàn, giữ luồng request không đứt gãy.</li>
+                        </ol>
+                    </div>
+                    <div class="col box" style="border-color: #E91E63; background: rgba(233,30,99,0.1)">
+                        <div class="box-title">Giai đoạn 2: Chaos & Self-Healing</div>
+                        <ol>
+                            <li>Bật Grafana xem RAM hệ thống.</li>
+                            <li>Log vào Worker hạ gục trực tiếp App Container (<code>docker rm -f</code>).</li>
+                            <li>Swarm nhận diện thiều hụt 1 mảnh Replica lập tức đắp lệnh khởi chạy container mới bù lỗ hổng. (Self-heal cực lẹ).</li>
+                        </ol>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Slide 10: Summary -->
+            <section>
+                <h2>8. Tổng kết & Tương lai mở rộng</h2>
+                <table class="table-custom text-left">
+                    <tr>
+                        <th width="30%">Cấu Phần</th>
+                        <th>Giá trị cốt lõi mang lại</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Hạ tầng Đồng bộ</strong></td>
+                        <td>Đám mây khởi tạo bằng Terraform chặn lỗi Drift hệ thống, dùng Ansible phủ biến môi trường toàn cục.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>CI/CD Bảo Mật Kép</strong></td>
+                        <td>Giải phóng sức người thoát khỏi Console AWS, đẩy tính kỷ luật soát lỗi Trivy lên sát luồng giao code.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hướng Scale Tương Lai</strong></td>
+                        <td>
+                            Tier 4 Docker Swarm gọn nhẹ cho dự án khởi đầu.<br>
+                            <em>Tương lai:</em> Tích hợp dần sang AWS EKS theo chuẩn Enterprise nếu chịu tải vĩ mô.
+                        </td>
+                    </tr>
+                </table>
+            </section>
+
+            <!-- Slide 11: Q&A -->
+            <section>
+                <h1 style="color: #4CAF50;">THANK YOU</h1>
+                <p>--- Hoàn tất Trình Bày ---</p>
+                <br>
+                <h3>Q&A Session</h3>
+                <p style="font-size: 0.8em; color: #ccc;">Mời hội đồng và các giảng viên đặt câu hỏi.</p>
+            </section>
+
+        </div>
+    </div>
+
+    <!-- Reveal.js Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/plugin/highlight/highlight.min.js"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            slideNumber: 'c/t', 
+            transition: 'slide', 
+            width: 1400, // Scale form to handle horizontal space issues
+            height: 800,
+            margin: 0.1,
+            minScale: 0.2,
+            maxScale: 2.0,
+            disableLayout: false, // Let reveal decide how to scale
+            plugins: [ RevealHighlight ]
+        });
+    </script>
+</body>
+</html>

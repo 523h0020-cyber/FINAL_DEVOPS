@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DevOps Final Defense - Production CI/CD Tier 4 Docker Swarm</title>
+
+    <!-- Reveal.js CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reset.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/theme/black.min.css">
+
+    <!-- Highlight.js Theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/monokai.min.css">
+
+    <!-- Mermaid CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+
+    <style>
+        .reveal {
+            font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        }
+        .reveal pre {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            font-size: 0.42em !important;
+            margin: 0 auto;
+            width: 100%;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .reveal pre code {
+            max-height: 500px;
+        }
+        .reveal h2 {
+            color: #4CAF50;
+            font-size: 1.6em;
+            margin-bottom: 20px;
+        }
+        .reveal h3 {
+            font-size: 1.1em;
+            color: #FFC107;
+            margin-top: 15px;
+        }
+        .reveal .text-left {
+            text-align: left;
+        }
+        .reveal .highlight-text {
+            color: #03A9F4;
+            font-weight: bold;
+        }
+        .reveal ul {
+            font-size: 0.75em;
+            margin-bottom: 15px;
+        }
+        .reveal li {
+            margin-bottom: 8px;
+        }
+        .flex-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            gap: 20px;
+            width: 100%;
+            margin-top: 15px;
+        }
+        .col {
+            flex: 1;
+            text-align: left;
+            min-width: 0;
+        }
+        .box {
+            border: 2px solid #4CAF50;
+            padding: 18px;
+            border-radius: 8px;
+            background: rgba(76, 175, 80, 0.1);
+            font-size: 0.65em;
+            box-sizing: border-box;
+            height: 100%;
+        }
+        .box-title {
+            color: #FFC107;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #4CAF50;
+            padding-bottom: 6px;
+            font-size: 1.15em;
+        }
+        .table-custom {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.58em;
+            margin-top: 15px;
+        }
+        .table-custom th, .table-custom td {
+            border: 1px solid #555;
+            padding: 10px;
+            text-align: left;
+        }
+        .table-custom th {
+            background: #333;
+            color: #4CAF50;
+            text-align: center;
+            font-weight: bold;
+        }
+        .mermaid {
+            background: transparent !important;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.7em;
+            font-weight: bold;
+            margin: 3px;
+        }
+        .badge-success { background: #4CAF50; color: white; }
+        .badge-warning { background: #FFC107; color: black; }
+        .badge-danger { background: #F44336; color: white; }
+        .badge-info { background: #03A9F4; color: white; }
+
+        .code-annotation {
+            color: #888;
+            font-style: italic;
+            font-size: 0.9em;
+        }
+
+        .phase-indicator {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            border-radius: 50%;
+            background: #4CAF50;
+            color: white;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+
+            <!-- Slide 1: Title -->
+            <section>
+                <h1 style="color: #4CAF50;">HỆ THỐNG CI/CD CẤP ĐỘ PRODUCTION</h1>
+                <h2 style="color: #FFC107;">Tier 4 Docker Swarm Architecture</h2>
+                <p style="font-size: 0.8em; margin-top: 30px;">
+                    <strong>Đồ án cuối kỳ:</strong> DevOps & Cloud Native Engineering<br>
+                    <strong>Domain:</strong> <span class="highlight-text">523h0020.site</span><br>
+                    <strong>Monitoring:</strong> grafana.523h0020.site | prometheus.523h0020.site
+                </p>
+                <p style="font-size: 0.65em; color: #888; margin-top: 25px;">
+                    Automation • Security • Scalability • Observability
+                </p>
+            </section>
+
+            <!-- Slide 2: Bối cảnh & Mục tiêu -->
+            <section>
+                <h2>🎯 Bối Cảnh & Mục Tiêu Hệ Thống</h2>
+                <div class="flex-container">
+                    <div class="col">
+                        <div class="box">
+                            <div class="box-title">📌 Startup X - Thách Thức</div>
+                            <ul>
+                                <li><strong>Vấn đề:</strong> Deploy thủ công → Downtime cao, lỗi human error</li>
+                                <li><strong>Yêu cầu:</strong> Zero-downtime deployment</li>
+                                <li><strong>Bảo mật:</strong> Phải scan vulnerability trước khi deploy</li>
+                                <li><strong>Giám sát:</strong> Real-time metrics & alerting</li>
+                                <li><strong>Chi phí:</strong> Tối ưu cho startup (không dùng EKS)</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="box">
+                            <div class="box-title">🎯 Giải Pháp Tier 4</div>
+                            <ul>
+                                <li><span class="badge badge-success">Automation</span> Toàn bộ pipeline từ code → production</li>
+                                <li><span class="badge badge-danger">DevSecOps</span> Trivy scan bắt buộc pass</li>
+                                <li><span class="badge badge-info">Scalability</span> Docker Swarm replicas + rolling update</li>
+                                <li><span class="badge badge-warning">Observability</span> Prometheus + Grafana + Node Exporter</li>
+                                <li><span class="badge badge-info">IaC</span> Terraform + Ansible (Idempotent)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Slide 3: Kiến trúc tổng quan -->
+            <section>
+                <h2>🏗️ Kiến Trúc Hệ Thống - Tier 4 Docker Swarm</h2>
+                <div class="mermaid">
+                    graph TB
+                        subgraph Internet
+                            DNS[DNS: 523h0020.site]
+                        end
+
+                        subgraph AWS_VPC[AWS VPC - Terraform Managed]
+                            IGW[Internet Gateway]
+
+                            subgraph Manager_Node[Manager Node - EC2]
+                                Traefik[Traefik Reverse Proxy<br/>HTTPS Auto SSL]
+                                Swarm_Manager[Docker Swarm Manager]
+                                App_Replica1[App Container 1]
+                                MongoDB[MongoDB Primary]
+                                Prometheus[Prometheus]
+                                Grafana[Grafana]
+                            end
+
+                            subgraph Worker_Nodes[Worker Nodes - EC2]
+                                App_Replica2[App Container 2]
+                                App_Replica3[App Container 3]
+                                NodeExporter[Node Exporter]
+                                cAdvisor[cAdvisor]
+                            end
+                        end
+
+                        subgraph GitHub
+                            Code[Source Code Push]
+                            Actions[GitHub Actions CI/CD]
+                        end
+
+                        DNS -->|Port 443| IGW
+                        IGW --> Traefik
+                        Traefik -->|Route by Host| App_Replica1
+                        Traefik -->|grafana.domain| Grafana
+                        Traefik -->|prometheus.domain| Prometheus
+
+                        Swarm_Manager -.->|Orchestrate| App_Replica2
+                        Swarm_Manager -.->|Orchestrate| App_Replica3
+
+                        App_Replica1 --> MongoDB
+                        App_Replica2 --> MongoDB
+                        App_Replica3 --> MongoDB
+
+                        Prometheus -->|Scrape Metrics| NodeExporter
+                        Prometheus -->|Scrape Metrics| cAdvisor
+                        Grafana -->|Query| Prometheus
+
+                        Code --> Actions
+                        Actions -->|SSH Deploy| Swarm_Manager
+
+                        style Traefik fill:#4CAF50
+                        style Swarm_Manager fill:#03A9F4
+                        style Prometheus fill:#FFC107
+                        style Grafana fill:#F44336
+                </div>
+                <p style="font-size: 0.6em; margin-top: 15px;">
+                    <strong>Luồng dữ liệu:</strong> DNS → Traefik (SSL Termination) → Swarm Overlay Network → App Replicas → MongoDB
+                </p>
+            </section>
+
+            <!-- Slide 4: Phase 1 - Terraform Infrastructure -->
+            <section>
+                <h2><span class="phase-indicator">1</span>Phase 1: Terraform - Infrastructure as Code</h2>
+                <h3>🔧 Tại sao chọn Terraform?</h3>
+                <ul>
+                    <li><strong>Idempotent:</strong> Chạy nhiều lần không tạo duplicate resources</li>
+                    <li><strong>State Management:</strong> Terraform state tracking changes</li>
+                    <li><strong>Auto-generate SSH Key:</strong> RSA 4096-bit với permission 0400</li>
+                </ul>
+
+                <pre><code class="language-hcl"># terraform/aws/main.tf - Auto SSH Key Generation
+resource "tls_private_key" "generated" {
+  count     = var.auto_generate_keypair ? 1 : 0
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "generated" {
+  count      = var.auto_generate_keypair ? 1 : 0
+  key_name   = var.ssh_key_name
+  public_key = tls_private_key.generated[0].public_key_openssh
+}
+
+resource "local_sensitive_file" "private_key" {
+  count           = var.auto_generate_keypair ? 1 : 0
+  filename        = var.keypair_output_path
+  content         = tls_private_key.generated[0].private_key_pem
+  file_permission = "0400"  # Secure permission for WSL
+}</code></pre>
+            </section>
+
+            <!-- Slide 5: Terraform Security Groups -->
+            <section>
+                <h2>🔒 Terraform Security Groups - Production Grade</h2>
+                <table class="table-custom">
+                    <thead>
+                        <tr>
+                            <th>Port</th>
+                            <th>Protocol</th>
+                            <th>Purpose</th>
+                            <th>CIDR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>22</strong></td>
+                            <td>TCP</td>
+                            <td>SSH Management</td>
+                            <td>0.0.0.0/0 (Restricted in production)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>80</strong></td>
+                            <td>TCP</td>
+                            <td>HTTP → HTTPS Redirect</td>
+                            <td>0.0.0.0/0</td>
+                        </tr>
+                        <tr>
+                            <td><strong>443</strong></td>
+                            <td>TCP</td>
+                            <td>HTTPS (Traefik SSL)</td>
+                            <td>0.0.0.0/0</td>
+                        </tr>
+                        <tr>
+                            <td><strong>2377</strong></td>
+                            <td>TCP</td>
+                            <td>Swarm Cluster Management</td>
+                            <td>VPC Internal Only</td>
+                        </tr>
+                        <tr>
+                            <td><strong>7946</strong></td>
+                            <td>TCP/UDP</td>
+                            <td>Swarm Node Communication</td>
+                            <td>VPC Internal Only</td>
+                        </tr>
+                        <tr>
+                            <td><strong>4789</strong></td>
+                            <td>UDP</td>
+                            <td>Overlay Network (VXLAN)</td>
+                            <td>VPC Internal Only</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p style="font-size: 0.6em; margin-top: 15px; color: #FFC107;">
+                    ⚠️ <strong>Security Best Practice:</strong> Swarm ports chỉ mở trong VPC, không expose ra Internet
+                </p>
+            </section>
+
+
+            <!-- Slide 6: Phase 2 - Ansible Configuration -->
+            <section>
+                <h2><span class="phase-indicator">2</span>Phase 2: Ansible - Configuration Management</h2>
+                <h3>📦 Ansible Playbooks Structure</h3>
+                <div class="flex-container">
+                    <div class="col">
+                        <div class="box">
+                            <div class="box-title">01-bootstrap.yml</div>
+                            <ul>
+                                <li>Update apt packages</li>
+                                <li>Install Docker Engine</li>
+                                <li>Configure Docker daemon</li>
+                                <li>Add user to docker group</li>
+                                <li>Enable Docker service</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="box">
+                            <div class="box-title">02-swarm.yml</div>
+                            <ul>
+                                <li>Init Swarm on Manager</li>
+                                <li>Get join token</li>
+                                <li>Join Workers to cluster</li>
+                                <li>Verify cluster state</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="box">
+                            <div class="box-title">03-traefik-letsencrypt.yml</div>
+                            <ul>
+                                <li>Create traefik-public network</li>
+                                <li>Deploy Traefik stack</li>
+                                <li>Configure Let's Encrypt</li>
+                                <li>Wait for convergence</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <pre><code class="language-yaml"># ansible/playbooks/02-swarm.yml
+- name: Initialize Docker Swarm on manager
+  hosts: manager
+  become: true
+  tasks:
+    - name: Ensure manager is in swarm mode
+      community.docker.docker_swarm:
+        state: present
+        advertise_addr: "{{ ansible_host }}"
+
+    - name: Read swarm join tokens
+      community.docker.docker_swarm_info:
+      register: manager_swarm_info
+
+- name: Join worker nodes to Docker Swarm
+  hosts: workers
+  become: true
+  tasks:
+    - name: Ensure worker is joined to swarm
+      community.docker.docker_swarm:
+        state: join
+        join_token: "{{ hostvars[groups['manager'][0]].swarm_worker_join_token }}"
+        remote_addrs:
+          - "{{ hostvars[groups['manager'][0]].swarm_manager_endpoint }}:2377"
+</code></pre>
+            </section>
+
+            <!-- Slide 7: Phase 3 - Traefik Reverse Proxy -->
+            <section>
+                <h2><span class="phase-indicator">3</span>Phase 3: Traefik - Reverse Proxy & SSL</h2>
+                <h3>🌐 Tại sao dùng Traefik?</h3>
+                <ul>
+                    <li><strong>Auto SSL:</strong> Let's Encrypt tự động renew certificates</li>
+                    <li><strong>Service Discovery:</strong> Tự động phát hiện Docker services qua labels</li>
+                    <li><strong>Zero Config:</strong> Không cần config file phức tạp</li>
+                    <li><strong>HTTP → HTTPS:</strong> Tự động redirect</li>
+                </ul>
+
+                <pre><code class="language-yaml"># Traefik Stack với Let's Encrypt
+services:
+  traefik:
+    image: "traefik:v3.0.4"
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.swarmMode=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--certificatesResolvers.le.acme.email=admin@523h0020.site"
+      - "--certificatesResolvers.le.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesResolvers.le.acme.httpChallenge=true"
+      - "--certificatesResolvers.le.acme.httpChallenge.entryPoint=web"
+    ports:
+      - target: 80
+        published: 80
+        mode: host
+      - target: 443
+        published: 443
+        mode: host
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/opt/swarm/traefik/acme.json:/letsencrypt/acme.json"
+    networks:
+      - traefik-public
+    deploy:
+      placement:
+        constraints:
+          - "node.role == manager"
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+</code></pre>
+            </section>
+
+
+            <!-- Slide 8: Phase 4 - GitHub Actions CI/CD Pipeline -->
+            <section>
+                <h2><span class="phase-indicator">4</span>Phase 4: GitHub Actions - DevSecOps Pipeline</h2>
+                <h3>🔄 CI/CD Workflow Architecture</h3>
+                <div class="mermaid">
+                    graph LR
+                        A[Git Push] --> B[CI Job]
+                        B --> C{Linting}
+                        C -->|Pass| D{Trivy FS Scan}
+                        D -->|Pass| E[Build & Push Job]
+                        E --> F{Docker Build}
+                        F --> G{Trivy Image Scan}
+                        G -->|Pass| H[Push to DockerHub]
+                        H --> I[CD Job]
+                        I --> J[SSH to Manager]
+                        J --> K[docker service update]
+                        K --> L[Rolling Update]
+
+                        C -->|Fail| X[❌ Stop Pipeline]
+                        D -->|HIGH/CRITICAL| X
+                        G -->|HIGH/CRITICAL| X
+
+                        style D fill:#F44336
+                        style G fill:#F44336
+                        style H fill:#4CAF50
+                        style L fill:#4CAF50
+                </div>
+            </section>
+
+            <!-- Slide 9: Trivy Security Scan -->
+            <section>
+                <h2>🛡️ DevSecOps: Trivy Security Scanning</h2>
+                <h3>Bắt buộc PASS trước khi deploy</h3>
+
+                <pre><code class="language-yaml"># .github/workflows/ci-cd.yml - Trivy Filesystem Scan
+- name: Trivy filesystem scan (fail on High/Critical)
+  uses: aquasecurity/trivy-action@master
+  with:
+    scan-type: fs
+    scan-ref: "${{ env.APP_DIR }}"
+    severity: "HIGH,CRITICAL"
+    ignore-unfixed: true
+    exit-code: "1"  # ← Pipeline FAIL nếu phát hiện lỗ hổng
+
+# Trivy Image Scan (sau khi build)
+- name: Trivy image scan (fail on High/Critical)
+  uses: aquasecurity/trivy-action@master
+  with:
+    scan-type: image
+    image-ref: "${{ env.DOCKER_IMAGE }}:scan-${{ github.sha }}"
+    severity: "HIGH,CRITICAL"
+    ignore-unfixed: true
+    exit-code: "1"
+</code></pre>
+
+                <div class="box" style="margin-top: 20px;">
+                    <div class="box-title">⚠️ Security Policy</div>
+                    <ul>
+                        <li><strong>HIGH/CRITICAL vulnerabilities:</strong> Pipeline bị block, không cho deploy</li>
+                        <li><strong>MEDIUM/LOW:</strong> Warning only, vẫn deploy được</li>
+                        <li><strong>ignore-unfixed:</strong> Bỏ qua lỗi chưa có patch (tránh false positive)</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Slide 10: Semantic Versioning -->
+            <section>
+                <h2>📦 Docker Image Tagging Strategy</h2>
+                <h3>Semantic Versioning + SHA Tags</h3>
+
+                <pre><code class="language-yaml"># Prepare semantic tags
+- name: Prepare semantic tags
+  id: prep_tags
+  shell: bash
+  run: |
+    SHA_TAG="sha-${GITHUB_SHA::7}"
+    SEMVER_TAG="v1.0.${GITHUB_RUN_NUMBER}"
+    echo "sha_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
+    echo "semver_tag=${SEMVER_TAG}" >> "$GITHUB_OUTPUT"
+
+# Build and push semantic tags (NO latest tag)
+- name: Build and push semantic tags
+  uses: docker/build-push-action@v6
+  with:
+    context: ${{ env.APP_DIR }}
+    push: true
+    tags: |
+      ${{ env.DOCKER_IMAGE }}:${{ steps.prep_tags.outputs.sha_tag }}
+      ${{ env.DOCKER_IMAGE }}:${{ steps.prep_tags.outputs.semver_tag }}
+</code></pre>
+
+                <table class="table-custom">
+                    <thead>
+                        <tr>
+                            <th>Tag Type</th>
+                            <th>Example</th>
+                            <th>Purpose</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>SHA Tag</strong></td>
+                            <td>sha-a1b2c3d</td>
+                            <td>Traceability - Biết chính xác commit nào được deploy</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Semver Tag</strong></td>
+                            <td>v1.0.42</td>
+                            <td>Auto-increment version (dựa vào GITHUB_RUN_NUMBER)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Git Release Tag</strong></td>
+                            <td>v2.0.0</td>
+                            <td>Manual release tag (chỉ khi push tag v*.*.*)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <p style="font-size: 0.6em; margin-top: 15px; color: #FFC107;">
+                    ⚠️ <strong>Best Practice:</strong> KHÔNG dùng "latest" tag trong production (không rollback được)
+                </p>
+            </section>
+
+            <!-- Slide 11: Zero-Downtime Deployment -->
+            <section>
+                <h2>🚀 Zero-Downtime Deployment Strategy</h2>
+                <h3>Docker Swarm Rolling Update</h3>
+
+                <pre><code class="language-yaml"># swarm-stack.yml - App Service Configuration
+services:
+  app:
+    image: ${DOCKER_IMAGE}:${APP_VERSION}
+    deploy:
+      replicas: 3  # ← 3 replicas để đảm bảo HA
+      update_config:
+        parallelism: 1      # Update từng container một
+        delay: 10s          # Đợi 10s giữa mỗi update
+        order: start-first  # ← Start new container TRƯỚC khi stop old
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.app.rule=Host(`${DOMAIN_NAME}`)"
+        - "traefik.http.routers.app.entrypoints=websecure"
+        - "traefik.http.routers.app.tls.certresolver=le"
+        - "traefik.http.services.app.loadbalancer.server.port=3000"
+</code></pre>
+
+                <div class="flex-container">
+                    <div class="col">
+                        <div class="box">
+                            <div class="box-title">📊 Rolling Update Flow</div>
+                            <ol style="font-size: 0.9em;">
+                                <li>Start new container (v1.0.2)</li>
+                                <li>Wait for health check pass</li>
+                                <li>Traefik route traffic to new</li>
+                                <li>Stop old container (v1.0.1)</li>
+                                <li>Repeat for next replica</li>
+                            </ol>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="box">
+                            <div class="box-title">✅ Benefits</div>
+                            <ul>
+                                <li><strong>Zero Downtime:</strong> Luôn có container serving</li>
+                                <li><strong>Auto Rollback:</strong> Nếu new version fail, Swarm tự rollback</li>
+                                <li><strong>Gradual Rollout:</strong> Phát hiện lỗi sớm</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- Slide 12: Phase 5 - Monitoring Stack -->
+            <section>
+                <h2><span class="phase-indicator">5</span>Phase 5: Monitoring - Prometheus & Grafana</h2>
+                <h3>📊 Observability Architecture</h3>
+
+                <div class="mermaid">
+                    graph TB
+                        subgraph Monitoring_Stack
+                            Prometheus[Prometheus<br/>Time-Series DB]
+                            Grafana[Grafana<br/>Visualization]
+                        end
+
+                        subgraph Exporters
+                            NodeExporter[Node Exporter<br/>System Metrics]
+                            cAdvisor[cAdvisor<br/>Container Metrics]
+                        end
+
+                        subgraph App_Services
+                            App1[App Replica 1]
+                            App2[App Replica 2]
+                            App3[App Replica 3]
+                        end
+
+                        NodeExporter -->|CPU, RAM, Disk| Prometheus
+                        cAdvisor -->|Container Stats| Prometheus
+                        App1 -.->|Metrics Endpoint| Prometheus
+                        App2 -.->|Metrics Endpoint| Prometheus
+                        App3 -.->|Metrics Endpoint| Prometheus
+
+                        Prometheus -->|PromQL Query| Grafana
+                        Grafana -->|HTTPS| User[User Browser]
+
+                        style Prometheus fill:#FFC107
+                        style Grafana fill:#F44336
+                </div>
+
+                <pre><code class="language-yaml"># prometheus/prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: node-exporter
+    dns_sd_configs:
+      - names:
+          - tasks.node-exporter
+        type: A
+        port: 9100
+
+  - job_name: cadvisor
+    dns_sd_configs:
+      - names:
+          - tasks.cadvisor
+        type: A
+        port: 8080
+</code></pre>
+            </section>
+
+            <!-- Slide 13: Demo & Q&A -->
+            <section>
+                <h2>🎬 Live Demo Scenario</h2>
+                <h3>Kịch bản thực tế</h3>
+
+                <table class="table-custom">
+                    <thead>
+                        <tr>
+                            <th>Bước</th>
+                            <th>Hành động</th>
+                            <th>Kết quả mong đợi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>1</strong></td>
+                            <td>Chạy ./ssh_auto/auto-fix.sh</td>
+                            <td>Toàn bộ hạ tầng được dựng tự động trong 10 phút</td>
+                        </tr>
+                        <tr>
+                            <td><strong>2</strong></td>
+                            <td>Truy cập https://523h0020.site</td>
+                            <td>App hiển thị với HTTPS (Let's Encrypt)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>3</strong></td>
+                            <td>Push code change lên GitHub</td>
+                            <td>GitHub Actions tự động build, scan, deploy</td>
+                        </tr>
+                        <tr>
+                            <td><strong>4</strong></td>
+                            <td>Xem Grafana dashboard</td>
+                            <td>Real-time metrics: CPU, RAM, Container stats</td>
+                        </tr>
+                        <tr>
+                            <td><strong>5</strong></td>
+                            <td>Kill 1 container: docker service scale app_app=2</td>
+                            <td>Swarm tự động restart → Self-healing</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Slide 14: Lessons Learned -->
+            <section>
+                <h2>📚 Bài Học Kinh Nghiệm</h2>
+
+                <div class="flex-container">
+                    <div class="col">
+                        <div class="box">
+                            <div class="box-title">✅ Thành Công</div>
+                            <ul>
+                                <li><strong>Automation:</strong> Giảm 90% thời gian setup từ 2 giờ → 10 phút</li>
+                                <li><strong>Security:</strong> Trivy scan phát hiện 15+ vulnerabilities trước khi deploy</li>
+                                <li><strong>Zero-downtime:</strong> Rolling update không gián đoạn service</li>
+                                <li><strong>Observability:</strong> Phát hiện memory leak qua Grafana dashboard</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="box">
+                            <div class="box-title">⚠️ Thách Thức</div>
+                            <ul>
+                                <li><strong>WSL Permission:</strong> SSH key cần copy sang Linux filesystem</li>
+                                <li><strong>Docker Config:</strong> Immutable config pattern để tránh lỗi "already exists"</li>
+                                <li><strong>DNS Propagation:</strong> Đợi 5-10 phút để Let's Encrypt hoạt động</li>
+                                <li><strong>Swarm Networking:</strong> Overlay network phải tạo trước khi deploy app</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Slide 15: Future Roadmap -->
+            <section>
+                <h2>🚀 Hướng Phát Triển Tương Lai</h2>
+
+                <table class="table-custom">
+                    <thead>
+                        <tr>
+                            <th>Tier</th>
+                            <th>Hiện tại (Tier 4)</th>
+                            <th>Tương lai (Tier 5+)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Orchestration</strong></td>
+                            <td>Docker Swarm (3 nodes)</td>
+                            <td>AWS EKS (Kubernetes) với Auto-scaling</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Database</strong></td>
+                            <td>MongoDB single replica</td>
+                            <td>AWS RDS Multi-AZ hoặc DocumentDB</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Monitoring</strong></td>
+                            <td>Self-hosted Prometheus + Grafana</td>
+                            <td>AWS CloudWatch + X-Ray (Distributed Tracing)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>CI/CD</strong></td>
+                            <td>GitHub Actions</td>
+                            <td>ArgoCD (GitOps) + Flux</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Security</strong></td>
+                            <td>Trivy scan</td>
+                            <td>AWS GuardDuty + Security Hub + Falco</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Slide 16: Thank You & Q&A -->
+            <section>
+                <h1 style="color: #4CAF50;">THANK YOU</h1>
+                <p style="font-size: 1.2em; margin-top: 30px;">--- Hoàn tất Trình Bày ---</p>
+                <br>
+                <h3>Q&A Session</h3>
+                <p style="font-size: 0.8em; color: #ccc; margin-top: 20px;">Mời hội đồng và các giảng viên đặt câu hỏi.</p>
+
+                <div style="margin-top: 40px; font-size: 0.7em; color: #888;">
+                    <p><strong>Repository:</strong> github.com/your-repo/devops-final</p>
+                    <p><strong>Live Demo:</strong> https://523h0020.site</p>
+                    <p><strong>Monitoring:</strong> https://grafana.523h0020.site</p>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <!-- Reveal.js Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/plugin/highlight/highlight.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+
+        Reveal.initialize({
+            hash: true,
+            slideNumber: 'c/t',
+            transition: 'slide',
+            width: 1400,
+            height: 800,
+            margin: 0.1,
+            minScale: 0.2,
+            maxScale: 2.0,
+            plugins: [ RevealHighlight ]
+        });
+    </script>
+</body>
+</html>
+
+            <!-- Slide 16: Thank You & Q&A -->
+            <section>
+                <h1 style="color: #4CAF50;">THANK YOU</h1>
+                <p style="font-size: 1.2em; margin-top: 30px;">--- Hoàn Tất Trình Bày ---</p>
+                <br>
+                <h3>Q&A Session</h3>
+                <p style="font-size: 0.8em; color: #ccc; margin-top: 20px;">
+                    Mời hội đồng và các giảng viên đặt câu hỏi
+                </p>
+
+                <div style="margin-top: 40px; font-size: 0.7em; color: #888;">
+                    <p><strong>Live Demo URLs:</strong></p>
+                    <p>🌐 App: <span class="highlight-text">https://523h0020.site</span></p>
+                    <p>📊 Grafana: <span class="highlight-text">https://grafana.523h0020.site</span></p>
+                    <p>📈 Prometheus: <span class="highlight-text">https://prometheus.523h0020.site</span></p>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <!-- Reveal.js Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/reveal.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.3.1/plugin/highlight/highlight.min.js"></script>
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#4CAF50',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#4CAF50',
+                lineColor: '#03A9F4',
+                secondaryColor: '#FFC107',
+                tertiaryColor: '#F44336'
+            }
+        });
+
+        // Initialize Reveal.js
+        Reveal.initialize({
+            hash: true,
+            slideNumber: 'c/t',
+            transition: 'slide',
+            width: 1400,
+            height: 800,
+            margin: 0.1,
+            minScale: 0.2,
+            maxScale: 2.0,
+            plugins: [ RevealHighlight ]
+        });
+    </script>
+</body>
+</html>
