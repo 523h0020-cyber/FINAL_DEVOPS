@@ -1,0 +1,20 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# Never commit terraform.tfvars to git.
+
+do_token    = "dop_v1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+project_name = "final-tier4"
+region       = "sgp1"
+
+# Cheapest sizes — tiết kiệm nhất
+manager_size = "s-1vcpu-2gb"   # $12/month — 2 GB RAM needed for Traefik + Prometheus
+worker_size  = "s-1vcpu-1gb"   # $6/month each
+worker_count = 2
+
+image                = "ubuntu-22-04-x64"
+ssh_key_name         = "final-devops-key"
+auto_generate_keypair = true
+keypair_output_path  = "./final-devops-key.pem"
+
+# Restrict SSH to your own IP for security
+# allowed_ssh_ips = ["YOUR_IP/32"]
+allowed_ssh_ips = ["0.0.0.0/0", "::/0"]

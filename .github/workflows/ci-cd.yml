@@ -177,6 +177,7 @@ jobs:
 
   cd:
     runs-on: ubuntu-latest
+    environment: production
     needs: build_and_push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
@@ -190,7 +191,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script_stop: true
           script: |
-            docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" -p "${{ secrets.DOCKERHUB_TOKEN }}"
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker pull "${{ needs.build_and_push.outputs.deploy_image }}"
             docker service update \
               --with-registry-auth \
