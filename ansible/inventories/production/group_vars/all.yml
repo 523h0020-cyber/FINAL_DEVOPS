@@ -9,5 +9,3 @@ whoami_version: "v1.10.2"
 
 docker_users:
   - ubuntu
-  - ec2-user
-  - debian

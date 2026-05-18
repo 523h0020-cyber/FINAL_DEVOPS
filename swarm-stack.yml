@@ -1,4 +1,4 @@
-﻿version: '3.8'
+version: '3.8'
 
 services:
   app:
@@ -7,45 +7,24 @@ services:
       - NODE_ENV=production
       - MONGO_URI=mongodb://mongodb:27017/final-app
       - PORT=3000
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health', (r) => { if (r.statusCode !== 200) process.exit(1); process.exit(0); }).on('error', () => process.exit(1));\""]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 40s
     networks:
       - traefik-public
       - backend
-      - monitoring  # FIX: Them vao network monitoring de Prometheus scrape duoc metrics
+      - monitoring  # FIX: Thêm vào network monitoring để Prometheus scrape được metrics
     deploy:
       replicas: 3
-      resources:
-        limits:
-          cpus: "0.50"
-          memory: 512M
-        reservations:
-          cpus: "0.25"
-          memory: 256M
       update_config:
         parallelism: 1
         delay: 10s
         order: start-first  # Zero-downtime rolling update
-        failure_action: rollback
-        monitor: 30s
-      rollback_config:
-        parallelism: 1
-        order: stop-first
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 5
-        window: 120s
       labels:
         - "traefik.enable=true"
-        # FIX: Dung bien ${DOMAIN_NAME} thay vi hardcode domain
+        # FIX: Dùng biến ${DOMAIN_NAME} thay vì hardcode domain
         - "traefik.http.routers.app.rule=Host(`${DOMAIN_NAME}`)"
         - "traefik.http.routers.app.entrypoints=websecure"
-        # FIX: Dong bo certresolver voi Traefik config
+        # FIX: Đồng bộ certresolver với Traefik config (dùng 'le' thay vì 'myresolver')
         - "traefik.http.routers.app.tls.certresolver=le"
         - "traefik.http.services.app.loadbalancer.server.port=3000"
 
@@ -60,9 +39,6 @@ services:
       placement:
         constraints:
           - node.role == manager
-      rollback_config:
-        parallelism: 1
-        order: stop-first
       restart_policy:
         condition: on-failure
 
@@ -72,7 +48,7 @@ networks:
   backend:
     driver: overlay
   monitoring:
-    external: true
+    external: true  # Dùng network overlay đã tạo bởi monitoring stack
 
 volumes:
   mongo-data:

@@ -16,7 +16,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # 2. ĐỊNH NGHĨA CÁC ĐƯỜNG DẪN QUAN TRỌNG
 #    Tất cả đều dựa trên PROJECT_ROOT
 # ===========================================
-TERRAFORM_DIR="$PROJECT_ROOT/terraform/aws"
+TERRAFORM_DIR="$PROJECT_ROOT/terraform/digitalocean"
 MONITORING_DIR="$PROJECT_ROOT/monitoring"
 ANSIBLE_DIR="$PROJECT_ROOT/ansible"
 SSH_KEY="$TERRAFORM_DIR/final-devops-key.pem"
@@ -56,23 +56,22 @@ else
     echo -e "${GREEN}✅ Đã có Terraform.${NC}"
 fi
 
-# 2. Kiểm tra AWS CLI
-if ! command -v aws &> /dev/null; then
-    echo -en "${YELLOW}⚠️ Chưa thấy AWS CLI. Bạn có muốn cài đặt tự động không? (y/n): ${NC}"
-    read install_aws
-    if [[ "$install_aws" =~ ^[Yy]$ ]]; then
+# 2. Kiểm tra doctl (DigitalOcean CLI)
+if ! command -v doctl &> /dev/null; then
+    echo -en "${YELLOW}⚠️ Chưa thấy doctl. Bạn có muốn cài đặt tự động không? (y/n): ${NC}"
+    read install_doctl
+    if [[ "$install_doctl" =~ ^[Yy]$ ]]; then
         sudo apt-get update && sudo apt-get install -y unzip curl
-        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-        unzip -q awscliv2.zip
-        sudo ./aws/install
-        rm -rf awscliv2.zip aws/
-        echo -e "${GREEN}✅ Đã cài đặt AWS CLI.${NC}"
+        DOCTL_VERSION=$(curl -s https://api.github.com/repos/digitalocean/doctl/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | tr -d 'v')
+        curl -sL "https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz" | tar -xzv
+        sudo mv doctl /usr/local/bin
+        echo -e "${GREEN}✅ Đã cài đặt doctl.${NC}"
     else
-        echo -e "${RED}❌ Thiếu AWS CLI. Script không thể tiếp tục.${NC}"
+        echo -e "${RED}❌ Thiếu doctl. Script không thể tiếp tục.${NC}"
         exit 1
     fi
 else
-    echo -e "${GREEN}✅ Đã có AWS CLI.${NC}"
+    echo -e "${GREEN}✅ Đã có doctl.${NC}"
 fi
 
 # 3. Kiểm tra Ansible
@@ -100,17 +99,18 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 echo -e "${YELLOW}📦 Đang nạp cấu hình từ file .env...${NC}"
-set -a
-    . "$ENV_FILE"
-set +a
+set -a; . "$ENV_FILE"; set +a
 
-# Kiểm tra nhanh xem đã nạp được Access Key chưa, nếu chưa có thì cũng gọi Setup
-if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$AWS_SESSION_TOKEN" ]; then
-    echo -e "${RED}⚠️ Cảnh báo: File .env thiếu thông tin Credentials quan trọng (Access Key, Secret Key hoặc Session Token).${NC}"
+# Kiểm tra DO_TOKEN bắt buộc
+if [ -z "$DO_TOKEN" ]; then
+    echo -e "${RED}⚠️ Cảnh báo: File .env thiếu DO_TOKEN (DigitalOcean API token).${NC}"
     echo -e "${YELLOW}🔄 Đang khởi động lại quá trình Setup...${NC}"
     bash "$SCRIPT_DIR/lab-setup.sh"
     exit 0
 fi
+
+# Xác thực doctl với token từ .env
+doctl auth init --access-token "$DO_TOKEN" --no-context &>/dev/null || true
 
 # --- HÀM UPSERT BIẾN .ENV ---
 upsert_env() {
@@ -121,13 +121,16 @@ upsert_env() {
     echo "${key}=${value}" >> "$ENV_FILE"
 }
 
-# --- PHASE 2: TERRAFORM — Chuẩn bị hạ tầng ---
-echo -e "${YELLOW}🚀 Đang chuẩn bị hạ tầng với Terraform...${NC}"
+# --- PHASE 2: TERRAFORM — Chuẩn bị hạ tầng DigitalOcean ---
+echo -e "${YELLOW}🚀 Đang chuẩn bị hạ tầng DigitalOcean với Terraform...${NC}"
 
 cd "$TERRAFORM_DIR" || { echo -e "${RED}❌ Không tìm thấy thư mục Terraform tại: $TERRAFORM_DIR${NC}"; exit 1; }
 
 # Khởi tạo và đồng bộ lock file
 terraform init -upgrade
+
+# Truyền DO_TOKEN qua env var (TF_VAR_do_token) để không cần terraform.tfvars
+export TF_VAR_do_token="$DO_TOKEN"
 
 # Chạy apply (set -e sẽ tự thoát nếu lỗi, không cần kiểm tra $? thêm)
 terraform apply -auto-approve
@@ -144,20 +147,9 @@ export CONFIG_VERSION=$(date +%s)
 upsert_env "CONFIG_VERSION" "$CONFIG_VERSION"
 
 export GF_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
-if [ -z "${GF_SECURITY_ADMIN_PASSWORD:-}" ] || [ "$GF_SECURITY_ADMIN_PASSWORD" = "ChangeMe_123!" ]; then
-    echo -e ""
-    echo -en "${YELLOW}Nhap mat khau Grafana admin (khong de trong): ${NC}"
-    read -rsp "" gf_pass
-    echo ""
-    if [ -z "$gf_pass" ]; then
-        echo -e "${RED}❌ Mat khau Grafana admin khong duoc de trong.${NC}"
-        exit 1
-    fi
-    export GF_SECURITY_ADMIN_PASSWORD="$gf_pass"
-    upsert_env "GF_SECURITY_ADMIN_PASSWORD" "$GF_SECURITY_ADMIN_PASSWORD"
-fi
-export GF_ADMIN_PASSWORD="$GF_SECURITY_ADMIN_PASSWORD"
+export GF_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
 upsert_env "GF_SECURITY_ADMIN_USER" "$GF_ADMIN_USER"
+upsert_env "GF_SECURITY_ADMIN_PASSWORD" "$GF_ADMIN_PASSWORD"
 echo -e ""
 echo -en "${YELLOW}Có muốn cập nhật các giá trị GitHub/Docker Hub ngay bây giờ? (y/n): ${NC}"
 read setup_choice
@@ -179,9 +171,7 @@ if [ "$setup_choice" = "y" ] || [ "$setup_choice" = "Y" ]; then
         echo -e "${GREEN}✅ Đã cập nhật DOCKERHUB_USERNAME${NC}"
     fi
     
-    read -rsp "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: " input_docker_token
-    echo ""
-    
+    read -sp "Docker Hub Token (DOCKERHUB_TOKEN) [leave blank to skip]: " input_docker_token
     if [ -n "$input_docker_token" ]; then
         upsert_env "DOCKERHUB_TOKEN" "$input_docker_token"
         export DOCKERHUB_TOKEN="$input_docker_token"
@@ -211,45 +201,30 @@ if [ ! -f "$SSH_KEY" ]; then
     exit 1
 fi
 
-# WSL KEY STAGING (không phụ thuộc cứng vào ~/.ssh)
-  # Ưu tiên ~/.ssh, nếu không ghi được thì fallback sang /tmp.
-  KEY_CANDIDATES=("$HOME/.ssh/final-devops-key.pem" "/tmp/final-devops-key.pem")
-  STAGED_KEY=""
+# WSL FIX: chmod 0400 không có tác dụng trên /mnt/c/ (NTFS mount của Windows).
+# Giải pháp: Copy key sang Linux filesystem thật (~/.ssh/) nơi chmod hoạt động đúng.
+WSL_SSH_KEY="$HOME/.ssh/final-devops-key.pem"
+mkdir -p "$HOME/.ssh"
+cp "$SSH_KEY" "$WSL_SSH_KEY"
+chmod 600 "$WSL_SSH_KEY"
 
-  for candidate in "${KEY_CANDIDATES[@]}"; do
-      target_dir="$(dirname "$candidate")"
-      mkdir -p "$target_dir" 2>/dev/null || true
+# Cập nhật biến SSH_KEY trỏ sang bản copy trên Linux filesystem
+SSH_KEY="$WSL_SSH_KEY"
+upsert_env "SSH_KEY_PATH" "$SSH_KEY"
+echo -e "${GREEN}✅ SSH key đã được sao chép sang Linux filesystem và bảo mật tại: $SSH_KEY${NC}"
 
-      if [ -w "$target_dir" ]; then
-          # install set luôn permission 600, gọn hơn cp + chmod
-          if install -m 600 "$SSH_KEY" "$candidate" 2>/dev/null; then
-              STAGED_KEY="$candidate"
-              break
-          fi
-      fi
-  done
+# 5. Dùng doctl tự động lấy IP hiện tại từ DigitalOcean
+echo -e "${YELLOW}🔍 Đang lấy IP mới nhất từ DigitalOcean của cụm Swarm...${NC}"
 
-  if [ -z "$STAGED_KEY" ]; then
-      echo -e "${RED}❌ Không thể staging SSH key vào ~/.ssh hoặc /tmp.${NC}"
-      echo -e "${YELLOW}➡️ Chạy: sudo chown -R $(whoami):$(whoami) $HOME/.ssh && chmod 700 $HOME/.ssh${NC}"
-      exit 1
-  fi
+MANAGER_IP=$(doctl compute droplet list \
+    --tag-name manager \
+    --format PublicIPv4 \
+    --no-header 2>/dev/null | head -n 1)
 
-  SSH_KEY="$STAGED_KEY"
-  upsert_env "SSH_KEY_PATH" "$SSH_KEY"
-  echo -e "${GREEN}✅ SSH key đã staging và bảo mật tại: $SSH_KEY${NC}"
-
-# 5. Dùng AWS CLI tự động lấy IP hiện tại
-echo -e "${YELLOW}🔍 Đang lấy 2 IP mới nhất từ AWS của cụm Swarm...${NC}"
-
-
- MANAGER_IP=$(aws ec2 describe-instances \
-      --filters "Name=tag:Role,Values=manager" "Name=instance-state-name,Values=running" \
-      --query "Reservations[*].Instances[*].PublicIpAddress" --output text | head -n 1)
-# Tìm máy Manager (dựa vào tags)
- WORKER_IPS=$(aws ec2 describe-instances \
-      --filters "Name=tag:Role,Values=worker" "Name=instance-state-name,Values=running" \
-      --query "Reservations[*].Instances[*].PublicIpAddress" --output text | tr '\t' '\n' | awk 'NF' | sort -u)
+WORKER_IPS=$(doctl compute droplet list \
+    --tag-name worker \
+    --format PublicIPv4 \
+    --no-header 2>/dev/null | awk 'NF' | sort -u)
 
   WORKER_IP_PRIMARY=$(echo "$WORKER_IPS" | head -n 1)
 
@@ -289,7 +264,7 @@ echo -e "${GREEN}✅ Đã cập nhật xong file host cho Ansible ($HOSTS_FILE).
  if [ -z "${DOCKERHUB_USERNAME:-}" ] || [ -z "${DOCKERHUB_TOKEN:-}" ]; then
       echo -e "${YELLOW}⚠️ Thiếu DOCKERHUB_USERNAME/DOCKERHUB_TOKEN trong .env.${NC}"
       read -p "Nhập Docker Hub Username: " input_docker_user_force
-      read -rp "Nhập Docker Hub Token: " input_docker_token_force
+      read -sp "Nhập Docker Hub Token: " input_docker_token_force
       echo ""
       if [ -z "$input_docker_user_force" ] || [ -z "$input_docker_token_force" ]; then
           echo -e "${RED}❌ Không thể tiếp tục CI/CD nếu thiếu DockerHub credentials.${NC}"
@@ -362,41 +337,6 @@ for ip in $WORKER_IPS; do
 done
 
 
- # --- DNS GATE: xác nhận DNS trước khi tiếp tục ---
-  echo -e "${YELLOW}🌐 Kiểm tra DNS trước khi tiếp tục...${NC}"
-  echo -e "Cần trỏ các bản ghi sau về: ${GREEN}$MANAGER_IP${NC}"
-  echo -e "  - ${DOMAIN_NAME}"
-  echo -e "  - grafana.${DOMAIN_NAME}"
-  echo -e "  - prometheus.${DOMAIN_NAME}"
-
-  while true; do
-    read -p "Bạn đã cấu hình DNS trên TenTen xong chưa? (y/n): " dns_ready
-    case "$dns_ready" in
-      [Yy]*)
-        ROOT_IP=$(nslookup "$DOMAIN_NAME" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
-        GRAFANA_IP=$(nslookup "grafana.$DOMAIN_NAME" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
-        PROM_IP=$(nslookup "prometheus.$DOMAIN_NAME" 2>/dev/null | awk '/^Address: /{print $2}' | tail -n1)
-
-        if [ "$ROOT_IP" = "$MANAGER_IP" ] && [ "$GRAFANA_IP" = "$MANAGER_IP" ] && [ "$PROM_IP" = "$MANAGER_IP" ]; then
-          echo -e "${GREEN}✅ DNS đã đúng. Tiếp tục deploy...${NC}"
-          break
-        else
-          echo -e "${RED}❌ DNS chưa đúng.${NC}"
-          echo -e "  root:      ${ROOT_IP:-N/A}"
-          echo -e "  grafana:   ${GRAFANA_IP:-N/A}"
-          echo -e "  prometheus:${PROM_IP:-N/A}"
-        fi
-        ;;
-      [Nn]*)
-        echo -e "${YELLOW}⏸ Tạm dừng. Cấu hình DNS xong thì chạy lại script.${NC}"
-        exit 0
-        ;;
-      *)
-        echo "Vui lòng nhập y hoặc n."
-        ;;
-    esac
-  done
-
 # --- PHASE 4.6: ANSIBLE — Cấu hình Server & Docker Swarm ---
 
 # 8. Chạy Ansible để cấu hình Server và Docker Swarm
@@ -465,17 +405,10 @@ echo -e "=========================================================="
 
 echo -e "${YELLOW}📊 Đang cấu hình hệ thống giám sát cho Domain: ${DOMAIN_NAME}${NC}"
 
-# CONFIG_VERSION da duoc khai bao o Phase 1, dung lai o day de dam bao nhat quan
-# Lay Admin User/Pass tu .env (bat buoc da nhap o buoc truoc)
+# CONFIG_VERSION đã được khai báo ở Phase 1, dùng lại ở đây để đảm bảo nhất quán
+# Lấy Admin User/Pass từ .env hoặc mặc định
 GF_USER=${GF_SECURITY_ADMIN_USER:-admin}
-GF_PASS=${GF_SECURITY_ADMIN_PASSWORD}
-
-# Tao Docker secret cho Grafana admin password (su dung CONFIG_VERSION)
-GRAFANA_SECRET_NAME="grafana_admin_password${CONFIG_VERSION}"
-echo -e "${YELLOW}🔐 Dang tao Docker secret cho Grafana admin password...${NC}"
-ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
-"docker secret rm $GRAFANA_SECRET_NAME >/dev/null 2>&1 || true; printf '%s' \"$GF_PASS\" | docker secret create $GRAFANA_SECRET_NAME - >/dev/null"
-echo -e "${GREEN}✅ Grafana secret da san sang: $GRAFANA_SECRET_NAME${NC}"
+GF_PASS=${GF_SECURITY_ADMIN_PASSWORD:-ChangeMe_123!}
 
 # 2. Copy thư mục monitoring lên Manager
 echo -e "${YELLOW}📤 Đang đồng bộ thư mục monitoring lên Manager...${NC}"
@@ -489,27 +422,15 @@ ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
 DOMAIN_NAME=$DOMAIN_NAME \
 CONFIG_VERSION=$CONFIG_VERSION \
 GF_SECURITY_ADMIN_USER=$GF_USER \
+GF_SECURITY_ADMIN_PASSWORD=$GF_PASS \
 docker stack deploy -c docker-stack.monitoring.yml monitoring --with-registry-auth"
 
 if [ $? -eq 0 ]; then
-    echo -e "${YELLOW}⏳ Dang cho monitoring converge...${NC}"
-    ready=0
-    for i in {1..12}; do
-        status=$(ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP \
-          "docker service ls --filter label=com.docker.stack.namespace=monitoring --format '{{.Name}} {{.Replicas}}'")
-        if echo "$status" | grep -q "monitoring_grafana 1/1" && echo "$status" | grep -q "monitoring_prometheus 1/1"; then
-            ready=1
-            break
-        fi
-        echo -n "."
-        sleep 10
-    done
-    echo ""
-    if [ "$ready" -ne 1 ]; then
-        echo -e "${RED}❌ Monitoring chua converge. Hay kiem tra docker service ls.${NC}"
-        ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP "docker service ls --filter label=com.docker.stack.namespace=monitoring"
-        exit 1
-    fi
+    echo -e "${YELLOW}⏳ Đang chờ hệ thống Monitoring sẵn sàng (60s)...${NC}"
+    # Chờ các service hội tụ (converge)
+    sleep 30
+    echo -e "${YELLOW}🔍 Kiểm tra trạng thái các service...${NC}"
+    ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$MANAGER_IP "docker service ls --filter label=com.docker.stack.namespace=monitoring"
     
     echo -e "${GREEN}✅ Phase 5 hoàn tất!${NC}"
     echo -e "${CYAN}-------------------------------------------------------${NC}"
@@ -524,7 +445,7 @@ fi
 # Quay lại thư mục gốc
 cd "$PROJECT_ROOT"
 
-# --- PHẦN DỌN DẸP CONFIG RÁC (CLEANUP) ------
+# --- PHẦN DỌN DẸP CONFIG RÁC (CLEANUP) ---
 
 echo -e "${YELLOW}🧹 Đang dọn dẹp các Docker Config cũ không còn sử dụng...${NC}"
 

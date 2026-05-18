@@ -32,8 +32,3 @@ output "eks_cluster_name" {
   description = "EKS cluster name when deployment_mode is kubernetes."
   value       = local.is_k8s ? aws_eks_cluster.this[0].name : null
 }
-
-output "swarm_manager_elastic_ip" {
-  description = "Static Elastic IP attached to the Swarm manager / Traefik entrypoint."
-  value       = local.is_swarm ? aws_eip.swarm_manager[0].public_ip : null
-}

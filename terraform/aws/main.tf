@@ -3,9 +3,9 @@ provider "aws" {
 }
 
 locals {
-  is_swarm  = var.deployment_mode == "swarm"
-  is_k8s    = var.deployment_mode == "kubernetes"
-  web_ports = [80, 443]
+  is_swarm   = var.deployment_mode == "swarm"
+  is_k8s     = var.deployment_mode == "kubernetes"
+  edge_ports = [22, 80, 443]
 
   tags = {
     Project   = var.project_name
@@ -13,9 +13,9 @@ locals {
   }
 }
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ──────────────────────────────────────────────────────────────────
 # Auto-generate SSH Keypair (Optional, based on auto_generate_keypair)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ──────────────────────────────────────────────────────────────────
 resource "tls_private_key" "generated" {
   count     = var.auto_generate_keypair ? 1 : 0
   algorithm = "RSA"
@@ -23,9 +23,9 @@ resource "tls_private_key" "generated" {
 }
 
 resource "aws_key_pair" "generated" {
-  count      = var.auto_generate_keypair ? 1 : 0
-  key_name   = var.ssh_key_name
-  public_key = tls_private_key.generated[0].public_key_openssh
+  count           = var.auto_generate_keypair ? 1 : 0
+  key_name        = var.ssh_key_name
+  public_key      = tls_private_key.generated[0].public_key_openssh
 
   tags = merge(local.tags, {
     Name = "${var.project_name}-keypair"
@@ -36,8 +36,8 @@ resource "aws_key_pair" "generated" {
   }
 }
 
-# local_sensitive_file tá»± Ä‘á»™ng áº©n ná»™i dung key khá»i logs vÃ  Ä‘áº·t permission 0600
-# Thay tháº¿ local_file vÃ¬ sensitive_content=true khÃ´ng há»£p lá»‡ trong local provider v2+
+# local_sensitive_file tự động ẩn nội dung key khỏi logs và đặt permission 0600
+# Thay thế local_file vì sensitive_content=true không hợp lệ trong local provider v2+
 resource "local_sensitive_file" "private_key" {
   count           = var.auto_generate_keypair ? 1 : 0
   filename        = var.keypair_output_path
@@ -152,11 +152,11 @@ resource "aws_route_table_association" "private" {
 
 resource "aws_security_group" "edge" {
   name        = "${var.project_name}-edge-sg"
-  description = "Allow restricted SSH, public web, and private Swarm traffic"
+  description = "Allow only 22, 80, 443"
   vpc_id      = aws_vpc.main.id
 
   dynamic "ingress" {
-    for_each = local.web_ports
+    for_each = local.edge_ports
     content {
       description = "Allow TCP ${ingress.value}"
       from_port   = ingress.value
@@ -166,45 +166,37 @@ resource "aws_security_group" "edge" {
     }
   }
 
+  # ── Docker Swarm internal communication (self-referencing) ──
   ingress {
-    description = "Restricted SSH access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_ssh_cidrs
-  }
-
-  # Docker Swarm internal communication (self-referencing)
-  ingress {
-    description = "Swarm cluster management"
-    from_port   = 2377
-    to_port     = 2377
-    protocol    = "tcp"
-    self        = true
+    description     = "Swarm cluster management"
+    from_port       = 2377
+    to_port         = 2377
+    protocol        = "tcp"
+    self            = true
   }
 
   ingress {
-    description = "Swarm node discovery (TCP)"
-    from_port   = 7946
-    to_port     = 7946
-    protocol    = "tcp"
-    self        = true
+    description     = "Swarm node discovery (TCP)"
+    from_port       = 7946
+    to_port         = 7946
+    protocol        = "tcp"
+    self            = true
   }
 
   ingress {
-    description = "Swarm node discovery (UDP)"
-    from_port   = 7946
-    to_port     = 7946
-    protocol    = "udp"
-    self        = true
+    description     = "Swarm node discovery (UDP)"
+    from_port       = 7946
+    to_port         = 7946
+    protocol        = "udp"
+    self            = true
   }
 
   ingress {
-    description = "VXLAN overlay network"
-    from_port   = 4789
-    to_port     = 4789
-    protocol    = "udp"
-    self        = true
+    description     = "VXLAN overlay network"
+    from_port       = 4789
+    to_port         = 4789
+    protocol        = "udp"
+    self            = true
   }
 
   egress {
@@ -220,16 +212,6 @@ resource "aws_security_group" "edge" {
   })
 }
 
-resource "aws_eip" "swarm_manager" {
-  count = local.is_swarm ? 1 : 0
-
-  domain = "vpc"
-
-  tags = merge(local.tags, {
-    Name = "${var.project_name}-swarm-manager-eip"
-  })
-}
-
 resource "aws_instance" "swarm_nodes" {
   count = local.is_swarm ? 3 : 0
 
@@ -240,21 +222,14 @@ resource "aws_instance" "swarm_nodes" {
   associate_public_ip_address = true
   key_name                    = var.ssh_key_name
 
-  # Äáº£m báº£o Key Pair Ä‘Ã£ Ä‘Æ°á»£c upload lÃªn AWS trÆ°á»›c khi táº¡o EC2
-  # TrÃ¡nh lá»—i InvalidKeyPair.NotFound khi auto_generate_keypair = true
+  # Đảm bảo Key Pair đã được upload lên AWS trước khi tạo EC2
+  # Tránh lỗi InvalidKeyPair.NotFound khi auto_generate_keypair = true
   depends_on = [aws_key_pair.generated]
 
   tags = merge(local.tags, {
     Name = "${var.project_name}-swarm-${count.index + 1}"
     Role = count.index == 0 ? "manager" : "worker"
   })
-}
-
-resource "aws_eip_association" "swarm_manager" {
-  count = local.is_swarm ? 1 : 0
-
-  allocation_id = aws_eip.swarm_manager[0].id
-  instance_id   = aws_instance.swarm_nodes[0].id
 }
 
 resource "aws_iam_role" "eks_cluster" {
@@ -368,4 +343,3 @@ resource "aws_eks_node_group" "this" {
 
   tags = local.tags
 }
-

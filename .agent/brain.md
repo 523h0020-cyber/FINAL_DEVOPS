@@ -1,15 +1,40 @@
 # PROJECT BRAIN & STATE
-**Current Phase**: Phase 6 (Final Audit & Deliverables)
-**Progress**: 95%
-**Status**: Hệ thống đã chạy, đang thực hiện rà soát chất lượng cao (QA).
 
-## 1. AUDIT FOCUS
-- Loại bỏ hoàn toàn hardcoded secrets (nếu còn).
-- Đảm bảo 100% không dùng tag `latest`.
-- Kiểm tra tính ổn định của Traefik Let's Encrypt.
-- Xác nhận logic của bootstrap.sh hoạt động với IP động từ AWS Academy.
+Note: dựa vào .agent, mỗi lần todo task cập nhật lại tiến trình vào brain.
 
-## 2. NEXT ACTION
-- Thực hiện Deep Audit.
-- Quay Video Demo theo kịch bản đã vạch sẵn.
-- Viết Technical Report dựa trên các minh chứng từ code.
+**Current Phase**: Phase 5 (Monitoring)
+**Progress**: 88%
+**Last Update**: Published full project to GitHub repository on main branch.
+
+## 1. TECH STACK MEMORY
+
+- Cloud Provider: AWS
+- App Stack: Node.js
+- Database: MongoDB (mongo:7.0.4)
+- CI/CD Tool: GitHub Actions
+- Domain: 523h0020.site
+
+## 2. INFRASTRUCTURE STATE
+
+- Network: Terraform-defined (VPC, Public/Private subnets, route tables, NAT)
+- Security: Inbound only TCP 22/80/443
+- Swarm mode: 3 nodes (1 manager + 2 workers)
+- Kubernetes mode: EKS (AWS) or GKE (GCP)
+- Config automation: Ansible playbooks for dependency bootstrap + Docker + Swarm + HTTPS ingress
+- Domain/TLS target: 523h0020.site (Let's Encrypt via Traefik ACME)
+- IP Addresses: [Available after terraform apply]
+
+## 3. COMPLETED TASKS LOG
+
+- [x] Set up `.agent` workspace structure (.plan, .rule, todo.md, current_task.md, brain.md).
+- [x] Write Terraform `.tf` files (AWS/GCP options, VPC, subnets, security, Swarm/K8s modes).
+- [x] Write Ansible playbooks for bootstrap, swarm init/join, and Let's Encrypt HTTPS.
+- [x] Write CI/CD workflows: checkout, cache, lint, Trivy fail gate, Docker semantic tag push, auto CD for Swarm/K8s.
+- [x] Write monitoring manifests/configs for Prometheus + Grafana on Docker Swarm.
+- [x] Prepare detailed video demo script (code change -> CI/CD -> HTTPS -> Grafana -> self-healing).
+- [x] Initialize local git repo and push project to GitHub: `523h0020-cyber/FINAL_DEVOPS`.
+
+## 4. NEXT ACTION
+
+- Run final recording using prepared script and capture all mandatory evidence.
+- Complete technical report with screenshots from pipeline, HTTPS domain, Grafana, and self-healing test.
