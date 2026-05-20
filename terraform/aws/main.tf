@@ -1,10 +1,9 @@
-provider "aws" {
+﻿provider "aws" {
   region = var.region
 }
 
 locals {
   is_swarm   = var.deployment_mode == "swarm"
-  is_k8s     = var.deployment_mode == "kubernetes"
   edge_ports = [22, 80, 443]
 
   tags = {
@@ -13,9 +12,9 @@ locals {
   }
 }
 
-# ──────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Auto-generate SSH Keypair (Optional, based on auto_generate_keypair)
-# ──────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 resource "tls_private_key" "generated" {
   count     = var.auto_generate_keypair ? 1 : 0
   algorithm = "RSA"
@@ -36,8 +35,8 @@ resource "aws_key_pair" "generated" {
   }
 }
 
-# local_sensitive_file tự động ẩn nội dung key khỏi logs và đặt permission 0600
-# Thay thế local_file vì sensitive_content=true không hợp lệ trong local provider v2+
+# local_sensitive_file tá»± Ä‘á»™ng áº©n ná»™i dung key khá»i logs vÃ  Ä‘áº·t permission 0600
+# Thay tháº¿ local_file vÃ¬ sensitive_content=true khÃ´ng há»£p lá»‡ trong local provider v2+
 resource "local_sensitive_file" "private_key" {
   count           = var.auto_generate_keypair ? 1 : 0
   filename        = var.keypair_output_path
@@ -166,7 +165,7 @@ resource "aws_security_group" "edge" {
     }
   }
 
-  # ── Docker Swarm internal communication (self-referencing) ──
+  # â”€â”€ Docker Swarm internal communication (self-referencing) â”€â”€
   ingress {
     description     = "Swarm cluster management"
     from_port       = 2377
@@ -222,8 +221,8 @@ resource "aws_instance" "swarm_nodes" {
   associate_public_ip_address = true
   key_name                    = var.ssh_key_name
 
-  # Đảm bảo Key Pair đã được upload lên AWS trước khi tạo EC2
-  # Tránh lỗi InvalidKeyPair.NotFound khi auto_generate_keypair = true
+  # Äáº£m báº£o Key Pair Ä‘Ã£ Ä‘Æ°á»£c upload lÃªn AWS trÆ°á»›c khi táº¡o EC2
+  # TrÃ¡nh lá»—i InvalidKeyPair.NotFound khi auto_generate_keypair = true
   depends_on = [aws_key_pair.generated]
 
   tags = merge(local.tags, {
@@ -232,114 +231,3 @@ resource "aws_instance" "swarm_nodes" {
   })
 }
 
-resource "aws_iam_role" "eks_cluster" {
-  count = local.is_k8s ? 1 : 0
-
-  name = "${var.project_name}-eks-cluster-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "eks.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-
-  tags = local.tags
-}
-
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-  count = local.is_k8s ? 1 : 0
-
-  role       = aws_iam_role.eks_cluster[0].name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-}
-
-resource "aws_iam_role" "eks_node" {
-  count = local.is_k8s ? 1 : 0
-
-  name = "${var.project_name}-eks-node-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-
-  tags = local.tags
-}
-
-resource "aws_iam_role_policy_attachment" "eks_node_policy" {
-  count = local.is_k8s ? 1 : 0
-
-  role       = aws_iam_role.eks_node[0].name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
-  count = local.is_k8s ? 1 : 0
-
-  role       = aws_iam_role.eks_node[0].name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-
-resource "aws_iam_role_policy_attachment" "eks_ecr_readonly" {
-  count = local.is_k8s ? 1 : 0
-
-  role       = aws_iam_role.eks_node[0].name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-}
-
-resource "aws_eks_cluster" "this" {
-  count = local.is_k8s ? 1 : 0
-
-  name     = "${var.project_name}-eks"
-  role_arn = aws_iam_role.eks_cluster[0].arn
-  version  = var.k8s_version
-
-  vpc_config {
-    subnet_ids              = aws_subnet.private[*].id
-    endpoint_public_access  = true
-    endpoint_private_access = true
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_cluster_policy
-  ]
-
-  tags = local.tags
-}
-
-resource "aws_eks_node_group" "this" {
-  count = local.is_k8s ? 1 : 0
-
-  cluster_name    = aws_eks_cluster.this[0].name
-  node_group_name = "${var.project_name}-ng"
-  node_role_arn   = aws_iam_role.eks_node[0].arn
-  subnet_ids      = aws_subnet.private[*].id
-  instance_types  = var.k8s_node_instance_types
-
-  scaling_config {
-    desired_size = var.k8s_desired_nodes
-    min_size     = var.k8s_min_nodes
-    max_size     = var.k8s_max_nodes
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_node_policy,
-    aws_iam_role_policy_attachment.eks_cni_policy,
-    aws_iam_role_policy_attachment.eks_ecr_readonly
-  ]
-
-  tags = local.tags
-}

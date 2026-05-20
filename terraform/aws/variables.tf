@@ -1,4 +1,4 @@
-variable "project_name" {
+﻿variable "project_name" {
   description = "Project name prefix used in resource naming."
   type        = string
   default     = "final-tier4"
@@ -11,13 +11,13 @@ variable "region" {
 }
 
 variable "deployment_mode" {
-  description = "Target orchestrator: swarm or kubernetes."
+  description = "Target orchestrator. Tier 4 uses Docker Swarm only."
   type        = string
   default     = "swarm"
 
   validation {
-    condition     = contains(["swarm", "kubernetes"], var.deployment_mode)
-    error_message = "deployment_mode must be either swarm or kubernetes."
+    condition     = var.deployment_mode == "swarm"
+    error_message = "Tier 4 in this project supports Docker Swarm only."
   }
 }
 
@@ -61,36 +61,7 @@ variable "keypair_output_path" {
   description = "Path where private key will be saved. Relative to terraform/aws/ directory."
   type        = string
   # ./final-devops-key.pem = terraform/aws/final-devops-key.pem
-  # Khớp với SSH_KEY="$TERRAFORM_DIR/final-devops-key.pem" trong auto-fix.sh
+  # Khá»›p vá»›i SSH_KEY="$TERRAFORM_DIR/final-devops-key.pem" trong auto-fix.sh
   default     = "./final-devops-key.pem"
 }
 
-variable "k8s_version" {
-  description = "EKS Kubernetes version."
-  type        = string
-  default     = "1.29"
-}
-
-variable "k8s_node_instance_types" {
-  description = "Instance types for EKS managed node group."
-  type        = list(string)
-  default     = ["t3.medium"]
-}
-
-variable "k8s_desired_nodes" {
-  description = "Desired node count for EKS managed node group."
-  type        = number
-  default     = 2
-}
-
-variable "k8s_min_nodes" {
-  description = "Minimum node count for EKS managed node group."
-  type        = number
-  default     = 1
-}
-
-variable "k8s_max_nodes" {
-  description = "Maximum node count for EKS managed node group."
-  type        = number
-  default     = 4
-}

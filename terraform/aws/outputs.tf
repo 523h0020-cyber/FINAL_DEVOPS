@@ -1,4 +1,4 @@
-output "vpc_id" {
+﻿output "vpc_id" {
   description = "Created VPC ID."
   value       = aws_vpc.main.id
 }
@@ -28,7 +28,4 @@ output "swarm_public_ips" {
   value       = local.is_swarm ? aws_instance.swarm_nodes[*].public_ip : []
 }
 
-output "eks_cluster_name" {
-  description = "EKS cluster name when deployment_mode is kubernetes."
-  value       = local.is_k8s ? aws_eks_cluster.this[0].name : null
-}
+
