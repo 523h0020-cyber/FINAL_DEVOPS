@@ -4,11 +4,14 @@ services:
   traefik:
     image: "traefik:{{ traefik_version }}"
     command:
-      - "--providers.docker=true"
-      - "--providers.docker.swarmMode=true"
-      - "--providers.docker.exposedByDefault=false"
+      - "--providers.swarm=true"
+      - "--providers.swarm.exposedByDefault=false"
+      - "--providers.swarm.network={{ traefik_network_name }}"
       - "--entryPoints.web.address=:80"
       - "--entryPoints.websecure.address=:443"
+      - "--entryPoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entryPoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entryPoints.web.http.redirections.entryPoint.permanent=true"
       - "--certificatesResolvers.le.acme.email={{ letsencrypt_email }}"
       - "--certificatesResolvers.le.acme.storage=/letsencrypt/acme.json"
       - "--certificatesResolvers.le.acme.httpChallenge=true"
@@ -50,10 +53,10 @@ services:
         condition: on-failure
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.whoami-http.rule=Host(`{{ domain_name }}`)"
+        - "traefik.http.routers.whoami-http.rule=Host(`whoami.{{ domain_name }}`)"
         - "traefik.http.routers.whoami-http.entryPoints=web"
         - "traefik.http.routers.whoami-http.middlewares=https-redirect"
-        - "traefik.http.routers.whoami-https.rule=Host(`{{ domain_name }}`)"
+        - "traefik.http.routers.whoami-https.rule=Host(`whoami.{{ domain_name }}`)"
         - "traefik.http.routers.whoami-https.entryPoints=websecure"
         - "traefik.http.routers.whoami-https.tls=true"
         - "traefik.http.routers.whoami-https.tls.certResolver=le"
@@ -62,3 +65,4 @@ services:
 networks:
   {{ traefik_network_name }}:
     external: true
+

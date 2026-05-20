@@ -68,4 +68,10 @@ variable "allowed_ssh_ips" {
   description = "List of IPs allowed to SSH (port 22). Use your own IP."
   type        = list(string)
   default     = []
+
+  validation {
+    condition     = length(var.allowed_ssh_ips) > 0
+    error_message = "Set allowed_ssh_ips to your public IP CIDR, for example [\"1.2.3.4/32\"]."
+  }
 }
+
