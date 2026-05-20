@@ -173,7 +173,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "deploy_image=${DOCKER_IMAGE}:${{ steps.prep_tags.outputs.semver_tag }}" >> "$GITHUB_OUTPUT"
+          echo "deploy_image=${{ secrets.DOCKERHUB_USERNAME }}/final-tier4-app:${{ steps.prep_tags.outputs.semver_tag }}" >> "$GITHUB_OUTPUT"
 
   cd:
     runs-on: ubuntu-latest
@@ -198,4 +198,4 @@ jobs:
             docker service update \
               --with-registry-auth \
               --image "${{ needs.build_and_push.outputs.deploy_image }}" \
-              "${{ secrets.SWARM_SERVICE_NAME }}"
+              "${{ secrets.SWARM_SERVICE_NAME }}"
