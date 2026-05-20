@@ -177,7 +177,6 @@ jobs:
 
   cd:
     runs-on: ubuntu-latest
-    environment: production
     needs: build_and_push
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
