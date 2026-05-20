@@ -167,6 +167,7 @@ resource "digitalocean_project" "main" {
   resources = concat(
     [
       digitalocean_droplet.manager.urn,
+      digitalocean_reserved_ip.manager.urn,
     ],
     digitalocean_droplet.workers[*].urn
   )
