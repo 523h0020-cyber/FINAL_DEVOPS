@@ -102,9 +102,11 @@
         enabled: true
         state: started
 
-    - name: Install Docker SDK for Python (required by community.docker)
+    - name: Install Docker SDK for Python and jsondiff (required by community.docker docker_stack)
       ansible.builtin.pip:
-        name: docker
+        name:
+          - docker
+          - jsondiff
         state: present
         executable: pip3
 
