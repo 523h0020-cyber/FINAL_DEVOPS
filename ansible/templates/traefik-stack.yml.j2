@@ -31,6 +31,8 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "/opt/swarm/traefik/acme.json:/letsencrypt/acme.json"
+    environment:
+      - "DOCKER_API_VERSION=1.41"
     networks:
       - {{ traefik_network_name }}
     deploy:
