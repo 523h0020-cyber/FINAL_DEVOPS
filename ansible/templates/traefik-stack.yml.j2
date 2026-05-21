@@ -3,12 +3,12 @@ version: "3.9"
 services:
   traefik:
     image: "traefik:{{ traefik_version }}"
-    environment:
-      - DOCKER_API_VERSION=1.44
+
     command:
-      - "--providers.swarm=true"
-      - "--providers.swarm.exposedByDefault=false"
-      - "--providers.swarm.network={{ traefik_network_name }}"
+      - "--providers.docker=true"
+      - "--providers.docker.swarmMode=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--providers.docker.network={{ traefik_network_name }}"
       - "--entryPoints.web.address=:80"
       - "--entryPoints.websecure.address=:443"
       - "--entryPoints.web.http.redirections.entryPoint.to=websecure"
@@ -32,6 +32,8 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "/opt/swarm/traefik/acme.json:/letsencrypt/acme.json"
+    environment:
+      - "DOCKER_API_VERSION=1.41"
     networks:
       - {{ traefik_network_name }}
     deploy:
@@ -67,4 +69,6 @@ services:
 networks:
   {{ traefik_network_name }}:
     external: true
+
+
 
