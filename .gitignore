@@ -9,3 +9,4 @@ ssh_auto/.env
 hosts.ini
 ansible/inventories/production/hosts.ini
 !hosts.ini.example
+.agent/
